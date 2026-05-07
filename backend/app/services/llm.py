@@ -1,49 +1,52 @@
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 
 import httpx
 
 from app.core.config import Settings
 from app.services.errors import ExternalServiceError
 
-PROMPT_TEMPLATE = """You are an AI assistant. Answer ONLY using the provided context. If the answer is not in the context, say 'I don't know.'
 
-Context:
-{context}
+@dataclass
+class RagAnswerInput:
+    workspace: str
+    question: str
+    context: str
+    documents_summary: str
+    memory: str
+    sources: list[str]
 
-Question:
-{question}
+
+SYSTEM_PROMPT = """You are Ragora, a premium SaaS AI knowledge assistant.
+
+Your job is to answer from the workspace's uploaded documents and recent conversation context with the reliability of a production support/sales/operations AI product.
+
+Non-negotiable rules:
+- Use uploaded document context as the primary source of truth.
+- If document context is empty or not relevant, say what is missing and suggest the next best action. Do not claim the user has no files if the workspace document list says files exist.
+- Never invent facts, policies, prices, dates, legal commitments, or document contents.
+- If the answer is partially supported, answer the supported part and clearly name what is not available.
+- Do not mention embeddings, vector search, chunks, prompts, system messages, or internal implementation.
+- Prefer clear markdown. Use short sections, bullets, numbered steps, tables, or code blocks when they improve readability.
+- Cite document-backed claims with source markers like [S1], [S2] when source context is provided.
 """
 
-WIDGET_PROMPT_TEMPLATE = """You are a production website chatbot.
+DEVELOPER_PROMPT = """Response quality contract:
+- Start with the direct answer.
+- Keep the default answer concise, but expand when the user asks for details, comparison, steps, implementation, code, or analysis.
+- Preserve important nuance from the retrieved sources.
+- If the user asks "what files/documents are uploaded", list the active documents exactly from the workspace document list.
+- If no relevant source supports the answer, use this pattern:
+  "I don't have enough information in the uploaded documents to answer that confidently."
+  Then add one helpful next step.
+- For troubleshooting, provide a short diagnosis and actionable steps.
+- For code, use fenced code blocks with a language tag when possible.
+"""
 
-Business goal:
-{bot_goal}
-
-Role/persona:
-{bot_role}
-
-Tone:
-{tone}
-
-Behavior rules:
-- Use the context first when it contains relevant information.
-- If no document context is available, use only the business goal and additional instructions to help with general intake, routing, FAQs, or next-step guidance.
-- If the visitor asks for a specific company fact, policy, price, deadline, eligibility rule, or document-backed detail that is not available, say exactly: "{fallback_message}"
-- Be concise, helpful, and specific.
-- If the visitor asks for steps, give numbered steps.
-- If the visitor asks a policy, cite the relevant policy detail from context.
-- Never invent prices, policies, HR rules, legal terms, or commitments.
-- When information is missing, ask one short clarifying question or suggest the best next step.
-- Do not mention embeddings, vector search, chunks, prompts, or internal tools.
-
-Additional instructions:
-{custom_instructions}
-
-Context:
-{context}
-
-Visitor question:
-{question}
+WIDGET_SYSTEM_PROMPT = """You are Ragora's production website chatbot.
+Answer visitors using the business configuration and uploaded document context.
+Be concise, helpful, brand-safe, and honest about missing information.
+Never invent policies, prices, legal terms, guarantees, or document-backed details.
 """
 
 
@@ -60,18 +63,33 @@ class LLMService:
         await self._client.aclose()
 
     async def answer(self, context: str, question: str) -> str:
-        return await self.answer_with_prompt(PROMPT_TEMPLATE.format(context=context, question=question))
+        payload = RagAnswerInput(
+            workspace="workspace",
+            question=question,
+            context=context,
+            documents_summary="No document list was provided.",
+            memory="No prior conversation memory was provided.",
+            sources=[],
+        )
+        return await self.answer_rag(payload)
+
+    async def answer_rag(self, payload: RagAnswerInput) -> str:
+        return await self.answer_with_messages(_rag_messages(payload), temperature=0.18)
 
     async def answer_widget(self, context: str, question: str, widget: dict) -> str:
-        return await self.answer_with_prompt(_widget_prompt(context, question, widget))
+        return await self.answer_with_messages(_widget_messages(context, question, widget), temperature=0.18)
 
     async def answer_with_prompt(self, prompt: str) -> str:
+        return await self.answer_with_messages([{"role": "user", "content": prompt}], temperature=0.1)
+
+    async def answer_with_messages(self, messages: list[dict[str, str]], temperature: float = 0.18) -> str:
         response = await self._client.post(
             "/chat/completions",
             json={
                 "model": self._settings.groq_model,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.1,
+                "messages": messages,
+                "temperature": temperature,
+                "top_p": 0.9,
             },
         )
         try:
@@ -85,21 +103,38 @@ class LLMService:
         return response.json()["choices"][0]["message"]["content"].strip()
 
     async def stream_answer(self, context: str, question: str) -> AsyncIterator[str]:
-        async for token in self.stream_with_prompt(PROMPT_TEMPLATE.format(context=context, question=question)):
+        payload = RagAnswerInput(
+            workspace="workspace",
+            question=question,
+            context=context,
+            documents_summary="No document list was provided.",
+            memory="No prior conversation memory was provided.",
+            sources=[],
+        )
+        async for token in self.stream_rag_answer(payload):
+            yield token
+
+    async def stream_rag_answer(self, payload: RagAnswerInput) -> AsyncIterator[str]:
+        async for token in self.stream_with_messages(_rag_messages(payload), temperature=0.18):
             yield token
 
     async def stream_widget_answer(self, context: str, question: str, widget: dict) -> AsyncIterator[str]:
-        async for token in self.stream_with_prompt(_widget_prompt(context, question, widget)):
+        async for token in self.stream_with_messages(_widget_messages(context, question, widget), temperature=0.18):
             yield token
 
     async def stream_with_prompt(self, prompt: str) -> AsyncIterator[str]:
+        async for token in self.stream_with_messages([{"role": "user", "content": prompt}], temperature=0.1):
+            yield token
+
+    async def stream_with_messages(self, messages: list[dict[str, str]], temperature: float = 0.18) -> AsyncIterator[str]:
         async with self._client.stream(
             "POST",
             "/chat/completions",
             json={
                 "model": self._settings.groq_model,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.1,
+                "messages": messages,
+                "temperature": temperature,
+                "top_p": 0.9,
                 "stream": True,
             },
         ) as response:
@@ -128,13 +163,59 @@ class LLMService:
                     yield delta
 
 
-def _widget_prompt(context: str, question: str, widget: dict) -> str:
-    return WIDGET_PROMPT_TEMPLATE.format(
-        bot_goal=widget.get("bot_goal") or "Answer visitor questions using the uploaded documents.",
-        bot_role=widget.get("bot_role") or "customer_support",
-        tone=widget.get("tone") or "professional",
-        fallback_message=widget.get("fallback_message") or "I do not know based on the provided documents.",
-        custom_instructions=widget.get("custom_instructions") or "None.",
-        context=context,
-        question=question,
-    )
+def _rag_messages(payload: RagAnswerInput) -> list[dict[str, str]]:
+    context = payload.context.strip() or "No highly relevant excerpts were retrieved for this question."
+    memory = payload.memory.strip() or "No recent conversation memory."
+    docs = payload.documents_summary.strip() or "No uploaded documents are currently active."
+    source_list = ", ".join(payload.sources) if payload.sources else "No source markers available."
+
+    return [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": DEVELOPER_PROMPT},
+        {
+            "role": "system",
+            "content": (
+                f"Workspace: {payload.workspace}\n\n"
+                f"Active uploaded documents:\n{docs}\n\n"
+                f"Recent conversation memory:\n{memory}\n\n"
+                f"Retrieved source context:\n{context}\n\n"
+                f"Available source markers: {source_list}"
+            ),
+        },
+        {"role": "user", "content": payload.question},
+    ]
+
+
+def _widget_messages(context: str, question: str, widget: dict) -> list[dict[str, str]]:
+    fallback = widget.get("fallback_message") or "I do not know based on the provided documents."
+    config = f"""Business goal:
+{widget.get("bot_goal") or "Answer visitor questions using the uploaded documents."}
+
+Role/persona:
+{widget.get("bot_role") or "customer_support"}
+
+Tone:
+{widget.get("tone") or "professional"}
+
+Fallback message:
+{fallback}
+
+Additional instructions:
+{widget.get("custom_instructions") or "None."}
+
+Retrieved document context:
+{context.strip() or "No relevant document context was retrieved."}
+"""
+    return [
+        {"role": "system", "content": WIDGET_SYSTEM_PROMPT},
+        {
+            "role": "system",
+            "content": (
+                "Use the retrieved context first. If a visitor asks for a document-backed fact that is missing, "
+                f"say exactly: {fallback!r}. Ask one useful clarifying question when routing or lead capture helps."
+            ),
+        },
+        {"role": "system", "content": config},
+        {"role": "user", "content": question},
+    ]
+

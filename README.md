@@ -1,6 +1,6 @@
-# PDF RAG Assistant
+# Ragora
 
-A lightweight production-ready RAG web app for uploading PDFs, embedding their chunks with Mistral, storing vectors in Supabase pgvector, and answering questions with Groq.
+Ragora is a premium AI knowledge SaaS for uploading documents, embedding their chunks with Mistral, storing vectors in Supabase pgvector, answering questions with Groq, and deploying branded website assistants.
 
 ## Folder Structure
 
@@ -35,12 +35,15 @@ A lightweight production-ready RAG web app for uploading PDFs, embedding their c
 
 ## Features
 
-- Username-based login stored in the browser
+- Premium SaaS landing page with hero, trusted-by logos, features, product showcase, testimonials, FAQ, final CTA, and footer
+- Modern authentication UI for login, signup, Google, forgot password, reset password, and email OTP verification
+- Backend authentication with password hashing, JWT access tokens, refresh-token sessions, Google ID-token verification, and workspace-scoped API access
 - PDF upload with text extraction
-- Chunking with `chunk_size=800` and `overlap=50`
+- Semantic document chunking with `chunk_size=1100` and `overlap=160`
 - Batched Mistral embeddings using `mistral-embed`
 - Supabase PostgreSQL plus `pgvector` storage
-- Top 5 cosine similarity retrieval filtered by `user_id`
+- Candidate retrieval, lexical reranking, source-labeled context injection, and ready-document filtering
+- Layered system/developer/memory prompts with workspace document awareness and recent chat memory
 - Groq answers using `llama3-8b-8192` by default
 - Chat history persisted in Supabase
 - Streaming bot responses
@@ -60,6 +63,10 @@ A lightweight production-ready RAG web app for uploading PDFs, embedding their c
 The backend uses the service role key and applies `user_id` filters on every read, search, and delete operation.
 
 If you already created the original tables, run [supabase/widget_upgrade.sql](/Users/henilbhavsar/Documents/Codex/2026-05-06/you-are-a-senior-ai-engineer/supabase/widget_upgrade.sql) to add the SaaS widget customization, branding, history, and analytics columns.
+
+For the full Ragora auth system, also run [supabase/auth_upgrade.sql](/Users/henilbhavsar/Documents/Codex/2026-05-06/you-are-a-senior-ai-engineer/supabase/auth_upgrade.sql) to add users and refresh sessions.
+
+If your project existed before the production RAG improvements, run [supabase/document_status_upgrade.sql](/Users/henilbhavsar/Documents/Codex/2026-05-06/you-are-a-senior-ai-engineer/supabase/document_status_upgrade.sql) to add document processing status, content-hash duplicate detection, and the improved retrieval function.
 
 ## Backend Setup
 
@@ -81,6 +88,8 @@ GROQ_API_KEY=your-groq-api-key
 GROQ_MODEL=llama3-8b-8192
 FRONTEND_ORIGIN=http://localhost:3000
 ALLOWED_ORIGINS=*
+JWT_SECRET=replace-with-a-long-random-secret
+GOOGLE_CLIENT_ID=your-google-oauth-client-id.apps.googleusercontent.com
 ```
 
 Run the API:
@@ -104,9 +113,26 @@ Fill `frontend/.env.local` if your backend is not on port 8000:
 
 ```bash
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-google-oauth-client-id.apps.googleusercontent.com
 ```
 
 Open `http://localhost:3000`.
+
+## Ragora Frontend Architecture
+
+The main app routes live in `frontend/app`:
+
+- `/` premium marketing landing page
+- `/login` returning user authentication
+- `/signup` new workspace creation
+- `/forgot-password` secure reset request UI
+- `/reset-password` password update UI
+- `/verify-email` OTP email verification UI
+- `/dashboard` authenticated product dashboard
+
+Reusable auth UI lives in `frontend/components/AuthPanel.tsx`. Auth client helpers live in `frontend/lib/auth.ts` and call the FastAPI auth endpoints for email login, signup, Google login, refresh-compatible session storage, password recovery UI, and email verification UI.
+
+For Google login, create a Google OAuth web client and set the same client ID in `frontend/.env.local` as `NEXT_PUBLIC_GOOGLE_CLIENT_ID` and in `backend/.env` as `GOOGLE_CLIENT_ID`. Set `JWT_SECRET` to a long random value before deploying.
 
 ## API Endpoints
 

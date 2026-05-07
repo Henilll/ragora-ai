@@ -125,7 +125,7 @@ export function AnalyticsPanel({ analytics }: Props) {
       </div>
 
       {/* Charts row */}
-      <div style={{ display: "grid", gap: "1rem", gridTemplateColumns: "1fr 340px" }}>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         {/* Bar chart */}
         <div className="card fade-up fade-up-d2" style={{ padding: "1.5rem" }}>
           <div style={{ marginBottom: "1.25rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>

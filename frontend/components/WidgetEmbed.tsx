@@ -50,6 +50,69 @@ function Section({ icon: Icon, title, children }: { icon: typeof Bot; title: str
   );
 }
 
+function WidgetPreview({ form }: { form: WidgetForm }) {
+  const isDark = form.theme === "dark";
+  return (
+    <div className="sticky top-5 overflow-hidden rounded-xl border border-white/10 bg-white/[0.045] p-4 shadow-[0_28px_90px_rgba(0,0,0,0.28)]">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-white">Live preview</p>
+          <p className="mt-1 text-xs text-slate-500">How your assistant will feel on-site</p>
+        </div>
+        <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${form.is_enabled ? "border border-teal-300/20 bg-teal-300/10 text-teal-100" : "border border-white/10 bg-white/5 text-slate-400"}`}>
+          {form.is_enabled ? "Live" : "Paused"}
+        </span>
+      </div>
+      <div className="relative min-h-[430px] overflow-hidden rounded-xl border border-white/10 bg-[radial-gradient(circle_at_30%_15%,rgba(139,92,246,0.24),transparent_16rem),linear-gradient(180deg,rgba(15,23,42,0.86),rgba(2,6,23,0.96))] p-4">
+        <div className="absolute left-5 top-5 h-2 w-28 rounded-full bg-white/10" />
+        <div className="absolute left-5 top-10 h-2 w-40 rounded-full bg-white/5" />
+        <div className="absolute bottom-5 right-5">
+          <div
+            className="mb-3 w-[280px] overflow-hidden rounded-xl border shadow-2xl"
+            style={{
+              borderColor: "rgba(255,255,255,0.14)",
+              background: isDark ? "#080b14" : "#f8fafc",
+              color: isDark ? "#f8fafc" : "#0f172a",
+              borderRadius: form.border_radius,
+            }}
+          >
+            <div className="flex items-center gap-3 px-4 py-3" style={{ background: form.secondary_color }}>
+              <div className="grid h-8 w-8 place-items-center overflow-hidden rounded-lg text-xs font-bold text-white" style={{ background: form.accent_color }}>
+                {form.logo_url ? <img src={form.logo_url} alt="" className="h-full w-full object-cover" /> : form.icon_label}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-white">{form.title || "Ask AI"}</p>
+                <p className="text-[11px] text-white/55">Answers from your knowledge base</p>
+              </div>
+            </div>
+            <div className="space-y-3 p-4">
+              <div className="max-w-[88%] rounded-lg bg-white/[0.08] px-3 py-2 text-xs leading-5">
+                {form.welcome_message || "Hi. Ask me anything from these documents."}
+              </div>
+              <div className="ml-auto max-w-[78%] rounded-lg px-3 py-2 text-xs leading-5 text-white" style={{ background: form.accent_color }}>
+                Can you summarize the onboarding policy?
+              </div>
+              <div className="max-w-[92%] rounded-lg bg-white/[0.08] px-3 py-2 text-xs leading-5">
+                Yes. I found the key onboarding steps and can cite the uploaded source document.
+              </div>
+              <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-500">
+                {form.input_placeholder || "Ask a question"}
+              </div>
+            </div>
+          </div>
+          <div
+            className={`ml-auto flex h-12 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold text-white shadow-2xl ${form.launcher_style === "circle" ? "w-12 px-0" : ""}`}
+            style={{ background: form.accent_color }}
+          >
+            <MessageCircle size={16} />
+            {form.launcher_style === "pill" && (form.launcher_label || "Chat with AI")}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function WidgetEmbed({ userId }: Props) {
   const [widget, setWidget] = useState<WidgetConfig | null>(null);
   const [form, setForm] = useState<WidgetForm>({ user_id: userId, ...DEFAULT_WIDGET });
@@ -101,7 +164,7 @@ export function WidgetEmbed({ userId }: Props) {
   }
 
   return (
-    <section className="card" style={{ padding: "1.5rem" }}>
+    <section className="glass rounded-xl p-4 sm:p-6">
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
@@ -146,6 +209,7 @@ export function WidgetEmbed({ userId }: Props) {
         </label>
       </div>
 
+      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_380px]">
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
         {/* Templates */}
         <div className="card-sm" style={{ padding: "1.125rem" }}>
@@ -310,6 +374,8 @@ export function WidgetEmbed({ userId }: Props) {
             </pre>
           </div>
         )}
+      </div>
+      <WidgetPreview form={form} />
       </div>
     </section>
   );

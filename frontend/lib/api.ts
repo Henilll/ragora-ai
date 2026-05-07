@@ -12,6 +12,8 @@ export type DocumentItem = {
   id: string;
   user_id: string;
   file_name: string;
+  file_hash?: string;
+  status?: "processing" | "ready" | "failed";
   chunk_count: number;
   created_at: string;
 };
@@ -78,10 +80,12 @@ async function errorMessage(response: Response): Promise<string> {
 }
 
 async function jsonRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getAccessToken();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
   });
@@ -121,12 +125,14 @@ export function getWidgetHistory(userId: string) {
 }
 
 export async function uploadPdf(userId: string, file: File) {
+  const token = getAccessToken();
   const body = new FormData();
   body.append("user_id", userId);
   body.append("file", file);
 
   const response = await fetch(`${API_BASE_URL}/upload`, {
     method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     body,
   });
 
@@ -138,9 +144,10 @@ export async function uploadPdf(userId: string, file: File) {
 }
 
 export async function deleteDocument(userId: string, documentId: string) {
+  const token = getAccessToken();
   const response = await fetch(
     `${API_BASE_URL}/documents/${documentId}?user_id=${encodeURIComponent(userId)}`,
-    { method: "DELETE" },
+    { method: "DELETE", headers: token ? { Authorization: `Bearer ${token}` } : undefined },
   );
   if (!response.ok) {
     throw new Error(await errorMessage(response));
@@ -152,9 +159,10 @@ export async function streamChat(
   message: string,
   onToken: (token: string) => void,
 ): Promise<void> {
+  const token = getAccessToken();
   const response = await fetch(`${API_BASE_URL}/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify({ user_id: userId, message, stream: true }),
   });
 
@@ -197,3 +205,4 @@ export async function streamChat(
     }
   }
 }
+import { getAccessToken } from "@/lib/auth";

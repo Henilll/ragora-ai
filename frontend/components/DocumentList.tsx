@@ -9,11 +9,20 @@ type Props = {
 };
 
 export function DocumentList({ documents, onDelete }: Props) {
+  const readyCount = documents.filter((document) => (document.status ?? "ready") === "ready").length;
+
   return (
     <div style={{ marginTop: "0.75rem" }}>
-      <p style={{ fontSize: "0.6875rem", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.625rem" }}>
-        Uploaded PDFs
-      </p>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p style={{ fontSize: "0.6875rem", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+          Uploaded PDFs
+        </p>
+        {documents.length > 0 && (
+          <span className="rounded-full border border-teal-300/20 bg-teal-300/10 px-2 py-0.5 text-[11px] font-semibold text-teal-100">
+            {readyCount}/{documents.length} ready
+          </span>
+        )}
+      </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
         {documents.length === 0 ? (
           <p style={{ fontSize: "0.8125rem", color: "var(--text-tertiary)", padding: "0.5rem 0" }}>No documents yet.</p>
@@ -52,7 +61,20 @@ export function DocumentList({ documents, onDelete }: Props) {
                 >
                   {document.file_name}
                 </p>
-                <p style={{ fontSize: "0.6875rem", color: "var(--text-tertiary)" }}>{document.chunk_count} chunks</p>
+                <div className="mt-1 flex items-center gap-2">
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      document.status === "failed"
+                        ? "bg-rose-400"
+                        : document.status === "processing"
+                          ? "bg-amber-300"
+                          : "bg-teal-300"
+                    }`}
+                  />
+                  <p style={{ fontSize: "0.6875rem", color: "var(--text-tertiary)" }}>
+                    {document.status === "processing" ? "Processing" : document.status === "failed" ? "Failed" : `${document.chunk_count} chunks`}
+                  </p>
+                </div>
               </div>
               <button
                 type="button"

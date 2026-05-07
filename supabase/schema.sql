@@ -1,9 +1,35 @@
 create extension if not exists vector;
 
+create table if not exists public.users (
+  id uuid primary key default gen_random_uuid(),
+  email text not null unique,
+  name text not null,
+  workspace text not null unique,
+  provider text not null default 'email' check (provider in ('email', 'google', 'github')),
+  password_hash text,
+  avatar_url text not null default '',
+  email_verified boolean not null default false,
+  google_sub text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.refresh_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  token_hash text not null unique,
+  user_agent text not null default '',
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  revoked_at timestamptz
+);
+
 create table if not exists public.documents (
   id uuid primary key default gen_random_uuid(),
   user_id text not null,
   file_name text not null,
+  file_hash text not null default '',
+  status text not null default 'ready' check (status in ('processing', 'ready', 'failed')),
   chunk_count integer not null default 0,
   created_at timestamptz not null default now()
 );
@@ -68,6 +94,19 @@ create table if not exists public.widget_chats (
 create index if not exists documents_user_created_idx
   on public.documents (user_id, created_at desc);
 
+create unique index if not exists documents_user_file_hash_idx
+  on public.documents (user_id, file_hash)
+  where file_hash <> '';
+
+create index if not exists users_email_idx
+  on public.users (email);
+
+create index if not exists users_workspace_idx
+  on public.users (workspace);
+
+create index if not exists refresh_sessions_token_hash_idx
+  on public.refresh_sessions (token_hash);
+
 create index if not exists document_chunks_user_document_idx
   on public.document_chunks (user_id, document_id);
 
@@ -87,7 +126,7 @@ create index if not exists widget_chats_widget_visitor_idx
 create or replace function public.match_document_chunks(
   query_embedding vector(1024),
   match_user_id text,
-  match_count integer default 5
+  match_count integer default 12
 )
 returns table (
   id bigint,
@@ -104,12 +143,16 @@ as $$
     dc.chunk_text,
     1 - (dc.embedding <=> query_embedding) as similarity
   from public.document_chunks dc
+  join public.documents d on d.id = dc.document_id
   where dc.user_id = match_user_id
+    and d.status = 'ready'
   order by dc.embedding <=> query_embedding
-  limit least(match_count, 5);
+  limit least(match_count, 20);
 $$;
 
 alter table public.documents enable row level security;
+alter table public.users enable row level security;
+alter table public.refresh_sessions enable row level security;
 alter table public.document_chunks enable row level security;
 alter table public.chats enable row level security;
 alter table public.chat_widgets enable row level security;

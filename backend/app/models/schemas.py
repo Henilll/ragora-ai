@@ -4,6 +4,61 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+class AuthUser(BaseModel):
+    id: str
+    email: str
+    name: str
+    workspace: str
+    provider: str
+    avatar_url: str = ""
+    email_verified: bool
+
+
+class AuthResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: AuthUser
+
+
+class SignupRequest(BaseModel):
+    name: str = Field(min_length=2)
+    email: str = Field(min_length=5)
+    password: str = Field(min_length=8)
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=5)
+    password: str = Field(min_length=1)
+
+
+class GoogleAuthRequest(BaseModel):
+    id_token: str = Field(min_length=20)
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(min_length=20)
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(min_length=5)
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=6)
+    password: str = Field(min_length=8)
+
+
+class VerifyEmailRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=6)
+
+
+class StatusResponse(BaseModel):
+    ok: bool
+    message: str
+
+
 class ChatRequest(BaseModel):
     user_id: str = Field(min_length=1)
     message: str = Field(min_length=1)
@@ -33,6 +88,8 @@ class DocumentItem(BaseModel):
     id: str
     user_id: str
     file_name: str
+    file_hash: str = ""
+    status: str = "ready"
     chunk_count: int
     created_at: datetime
 

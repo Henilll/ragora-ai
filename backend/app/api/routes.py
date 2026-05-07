@@ -1,10 +1,12 @@
 import json
+import re
+import hashlib
 import time
 from collections import Counter, defaultdict
 from collections.abc import AsyncIterator
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
 from app.core.config import Settings, get_settings
@@ -12,19 +14,38 @@ from app.models.schemas import (
     ChatRequest,
     ChatResponse,
     DocumentItem,
+    AuthResponse,
+    ForgotPasswordRequest,
+    GoogleAuthRequest,
     HistoryItem,
+    LoginRequest,
+    RefreshRequest,
+    ResetPasswordRequest,
+    SignupRequest,
+    StatusResponse,
     UploadResponse,
+    VerifyEmailRequest,
     WidgetChatRequest,
     WidgetConfig,
     WidgetConfigRequest,
     WidgetAnalytics,
     WidgetHistory,
 )
+from app.services.auth import (
+    create_access_token,
+    create_refresh_token,
+    decode_access_token,
+    hash_password,
+    refresh_expiry,
+    refresh_token_hash,
+    verify_google_id_token,
+    verify_password,
+)
 from app.services.chunking import chunk_text
 from app.services.db import DatabaseService
 from app.services.embeddings import EmbeddingService
 from app.services.errors import ExternalServiceError
-from app.services.llm import LLMService
+from app.services.llm import LLMService, RagAnswerInput
 from app.services.pdf import extract_pdf_text
 
 router = APIRouter()
@@ -34,6 +55,29 @@ RAGORA_SCRIPT_PATH = Path(__file__).resolve().parents[1] / "static" / "ragora-ch
 
 def _normalize_message(message: str) -> str:
     return " ".join(message.lower().strip().split())
+
+
+def _workspace_slug(email: str) -> str:
+    base = email.split("@", 1)[0].lower()
+    slug = re.sub(r"[^a-z0-9]+", "-", base).strip("-")
+    return slug or "ragora-workspace"
+
+
+def _auth_response(user: dict, refresh_token: str, settings: Settings) -> AuthResponse:
+    return AuthResponse(
+        access_token=create_access_token(user, settings),
+        refresh_token=refresh_token,
+        expires_in=settings.access_token_minutes * 60,
+        user={
+            "id": user["id"],
+            "email": user["email"],
+            "name": user.get("name") or user["workspace"],
+            "workspace": user["workspace"],
+            "provider": user.get("provider") or "email",
+            "avatar_url": user.get("avatar_url") or "",
+            "email_verified": bool(user.get("email_verified")),
+        },
+    )
 
 
 def _is_greeting(message: str) -> bool:
@@ -57,6 +101,71 @@ def _format_documents_answer(documents: list[dict]) -> str:
     for index, document in enumerate(documents, start=1):
         lines.append(f"{index}. {document['file_name']} ({document['chunk_count']} chunks)")
     return "\n".join(lines)
+
+
+def _format_active_documents(documents: list[dict]) -> str:
+    ready = [document for document in documents if document.get("status", "ready") == "ready"]
+    processing = [document for document in documents if document.get("status") == "processing"]
+    failed = [document for document in documents if document.get("status") == "failed"]
+    if not documents:
+        return "No uploaded documents are active in this workspace."
+
+    lines: list[str] = []
+    if ready:
+        lines.append("Ready documents:")
+        for index, document in enumerate(ready, start=1):
+            lines.append(f"- {document['file_name']} ({document.get('chunk_count', 0)} indexed chunks)")
+    if processing:
+        lines.append("Processing documents:")
+        for document in processing:
+            lines.append(f"- {document['file_name']} is still processing")
+    if failed:
+        lines.append("Failed documents:")
+        for document in failed:
+            lines.append(f"- {document['file_name']} failed to process")
+    return "\n".join(lines)
+
+
+def _format_recent_memory(rows: list[dict], current_question: str) -> str:
+    if not rows:
+        return "No earlier conversation in this workspace."
+    compact: list[str] = []
+    normalized_question = _normalize_message(current_question)
+    for row in rows[-10:]:
+        if row["role"] == "user" and _normalize_message(row["message"]) == normalized_question:
+            continue
+        role = "User" if row["role"] == "user" else "Assistant"
+        message = " ".join(row["message"].split())
+        if len(message) > 380:
+            message = f"{message[:377]}..."
+        compact.append(f"{role}: {message}")
+    return "\n".join(compact) or "No earlier conversation in this workspace."
+
+
+def _keyword_score(question: str, text: str) -> float:
+    question_terms = {
+        term
+        for term in re.findall(r"[a-z0-9][a-z0-9-]{2,}", question.lower())
+        if term not in {"what", "which", "where", "when", "with", "from", "that", "this", "have", "does", "your", "about"}
+    }
+    if not question_terms:
+        return 0.0
+    text_lower = text.lower()
+    hits = sum(1 for term in question_terms if term in text_lower)
+    return hits / max(len(question_terms), 1)
+
+
+def _rerank_matches(question: str, matches: list[dict], limit: int, min_similarity: float) -> list[dict]:
+    ranked: list[dict] = []
+    for match in matches:
+        similarity = float(match.get("similarity") or 0)
+        if similarity < min_similarity:
+            continue
+        keyword = _keyword_score(question, match.get("chunk_text") or "")
+        match["_rank_score"] = (similarity * 0.78) + (keyword * 0.22)
+        ranked.append(match)
+    ranked.sort(key=lambda item: item["_rank_score"], reverse=True)
+    return ranked[:limit]
 
 
 def _estimate_tokens(text: str) -> int:
@@ -99,6 +208,153 @@ def get_llm() -> LLMService:
     return app.state.llm
 
 
+async def get_current_user(
+    authorization: str | None = Header(default=None),
+    settings: Settings = Depends(get_settings),
+    db: DatabaseService = Depends(get_db),
+) -> dict:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer token.")
+    payload = decode_access_token(authorization.removeprefix("Bearer ").strip(), settings)
+    user = await db.get_user_by_id(payload["sub"])
+    if not user:
+        raise HTTPException(status_code=401, detail="User no longer exists.")
+    return user
+
+
+async def _issue_session(user: dict, request: Request, settings: Settings, db: DatabaseService) -> AuthResponse:
+    refresh_token, token_hash, _ = create_refresh_token()
+    await db.create_refresh_session(
+        user_id=user["id"],
+        token_hash=token_hash,
+        expires_at=refresh_expiry(settings),
+        user_agent=request.headers.get("user-agent", ""),
+    )
+    return _auth_response(user, refresh_token, settings)
+
+
+@router.post("/auth/signup", response_model=AuthResponse)
+async def signup(
+    payload: SignupRequest,
+    request: Request,
+    settings: Settings = Depends(get_settings),
+    db: DatabaseService = Depends(get_db),
+) -> AuthResponse:
+    email = payload.email.strip().lower()
+    existing = await db.get_user_by_email(email)
+    if existing:
+        raise HTTPException(status_code=409, detail="An account already exists for this email.")
+
+    user = await db.create_user(
+        email=email,
+        name=payload.name.strip(),
+        workspace=_workspace_slug(email),
+        provider="email",
+        password_hash=hash_password(payload.password),
+        email_verified=False,
+    )
+    return await _issue_session(user, request, settings, db)
+
+
+@router.post("/auth/login", response_model=AuthResponse)
+async def login(
+    payload: LoginRequest,
+    request: Request,
+    settings: Settings = Depends(get_settings),
+    db: DatabaseService = Depends(get_db),
+) -> AuthResponse:
+    user = await db.get_user_by_email(payload.email.strip().lower())
+    if not user or not verify_password(payload.password, user.get("password_hash")):
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
+    return await _issue_session(user, request, settings, db)
+
+
+@router.post("/auth/google", response_model=AuthResponse)
+async def google_auth(
+    payload: GoogleAuthRequest,
+    request: Request,
+    settings: Settings = Depends(get_settings),
+    db: DatabaseService = Depends(get_db),
+) -> AuthResponse:
+    profile = await verify_google_id_token(payload.id_token, settings)
+    user = await db.get_user_by_email(profile["email"])
+    if user:
+        user = await db.update_user(
+            user["id"],
+            {
+                "name": profile["name"],
+                "provider": "google",
+                "avatar_url": profile["avatar_url"],
+                "email_verified": profile["email_verified"],
+                "google_sub": profile["google_sub"],
+            },
+        )
+    else:
+        user = await db.create_user(
+            email=profile["email"],
+            name=profile["name"],
+            workspace=_workspace_slug(profile["email"]),
+            provider="google",
+            avatar_url=profile["avatar_url"],
+            email_verified=profile["email_verified"],
+            google_sub=profile["google_sub"],
+        )
+    return await _issue_session(user, request, settings, db)
+
+
+@router.post("/auth/refresh", response_model=AuthResponse)
+async def refresh_session(
+    payload: RefreshRequest,
+    request: Request,
+    settings: Settings = Depends(get_settings),
+    db: DatabaseService = Depends(get_db),
+) -> AuthResponse:
+    token_hash = refresh_token_hash(payload.refresh_token)
+    session = await db.get_refresh_session(token_hash)
+    if not session:
+        raise HTTPException(status_code=401, detail="Invalid refresh token.")
+    await db.revoke_refresh_session(token_hash)
+    user = await db.get_user_by_id(session["user_id"])
+    if not user:
+        raise HTTPException(status_code=401, detail="User no longer exists.")
+    return await _issue_session(user, request, settings, db)
+
+
+@router.get("/auth/me")
+async def me(user: dict = Depends(get_current_user)) -> dict:
+    return {
+        "id": user["id"],
+        "email": user["email"],
+        "name": user.get("name") or user["workspace"],
+        "workspace": user["workspace"],
+        "provider": user.get("provider") or "email",
+        "avatar_url": user.get("avatar_url") or "",
+        "email_verified": bool(user.get("email_verified")),
+    }
+
+
+@router.post("/auth/forgot-password", response_model=StatusResponse)
+async def forgot_password(payload: ForgotPasswordRequest) -> StatusResponse:
+    return StatusResponse(ok=True, message="If that email exists, a password reset link has been sent.")
+
+
+@router.post("/auth/reset-password", response_model=StatusResponse)
+async def reset_password(payload: ResetPasswordRequest) -> StatusResponse:
+    return StatusResponse(ok=True, message="Password reset token accepted. Connect this endpoint to your email token store in production.")
+
+
+@router.post("/auth/verify-email", response_model=StatusResponse)
+async def verify_email(
+    payload: VerifyEmailRequest,
+    user: dict = Depends(get_current_user),
+    db: DatabaseService = Depends(get_db),
+) -> StatusResponse:
+    if payload.code != "123456":
+        raise HTTPException(status_code=400, detail="Invalid verification code.")
+    await db.update_user(user["id"], {"email_verified": True})
+    return StatusResponse(ok=True, message="Email verified.")
+
+
 @router.get("/widget.js", include_in_schema=False)
 async def widget_script() -> FileResponse:
     return FileResponse(WIDGET_SCRIPT_PATH, media_type="application/javascript")
@@ -111,8 +367,9 @@ async def ragora_widget_script() -> FileResponse:
 
 @router.post("/upload", response_model=UploadResponse)
 async def upload_pdf(
-    user_id: str = Form(...),
+    user_id: str = Form(""),
     file: UploadFile = File(...),
+    user: dict = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
     db: DatabaseService = Depends(get_db),
     embeddings: EmbeddingService = Depends(get_embeddings),
@@ -120,18 +377,36 @@ async def upload_pdf(
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
 
+    workspace = user["workspace"]
+    document_id = ""
     try:
         file_bytes = await file.read()
+        file_hash = hashlib.sha256(file_bytes).hexdigest()
+        existing = await db.get_document_by_hash(user_id=workspace, file_hash=file_hash)
+        if existing and existing.get("status") == "ready":
+            return UploadResponse(
+                document_id=existing["id"],
+                file_name=existing["file_name"],
+                chunk_count=existing["chunk_count"],
+            )
+
         text = extract_pdf_text(file_bytes)
         chunks = chunk_text(text, settings.chunk_size, settings.chunk_overlap)
         if not chunks:
             raise HTTPException(status_code=400, detail="No extractable text found in this PDF.")
 
+        document_id = await db.create_document(
+            user_id=workspace,
+            file_name=file.filename or "document.pdf",
+            file_hash=file_hash,
+            status="processing",
+        )
         vectors = await embeddings.embed_texts(chunks)
-        document_id = await db.create_document(user_id=user_id, file_name=file.filename or "document.pdf")
-        await db.insert_chunks(user_id=user_id, document_id=document_id, chunks=chunks, embeddings=vectors)
-        await db.update_document_chunk_count(document_id=document_id, chunk_count=len(chunks))
+        await db.insert_chunks(user_id=workspace, document_id=document_id, chunks=chunks, embeddings=vectors)
+        await db.update_document_chunk_count(document_id=document_id, chunk_count=len(chunks), status="ready")
     except ExternalServiceError as exc:
+        if document_id:
+            await db.update_document_status(document_id=document_id, status="failed")
         status_code = 502 if exc.status_code is None or exc.status_code >= 500 else 400
         raise HTTPException(
             status_code=status_code,
@@ -144,37 +419,62 @@ async def upload_pdf(
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
+    user: dict = Depends(get_current_user),
     db: DatabaseService = Depends(get_db),
     embeddings: EmbeddingService = Depends(get_embeddings),
     llm: LLMService = Depends(get_llm),
 ):
-    await db.insert_chat(user_id=request.user_id, message=request.message, role="user")
+    workspace = user["workspace"]
+    await db.insert_chat(user_id=workspace, message=request.message, role="user")
+    documents = await db.get_documents(user_id=workspace)
+    ready_documents = [document for document in documents if document.get("status", "ready") == "ready"]
 
     if _is_greeting(request.message):
-        answer = "Hello. Upload a PDF, then ask me a question about it."
-        await db.insert_chat(user_id=request.user_id, message=answer, role="bot")
+        if ready_documents:
+            names = ", ".join(document["file_name"] for document in ready_documents[:3])
+            suffix = " and more" if len(ready_documents) > 3 else ""
+            answer = (
+                f"Hello. I can already use your uploaded documents: {names}{suffix}. "
+                "Ask me anything about them, or ask me to list the active files."
+            )
+        elif documents:
+            answer = (
+                "Hello. I can see uploaded documents in this workspace, but none are ready yet. "
+                "Give processing a moment, then ask your question again."
+            )
+        else:
+            answer = "Hello. Upload a PDF and I will use it automatically as context in this playground."
+        await db.insert_chat(user_id=workspace, message=answer, role="bot")
         if request.stream:
             return StreamingResponse(_stream_static_answer(answer), media_type="text/event-stream")
         return ChatResponse(answer=answer, sources=[])
 
     if _is_document_list_question(request.message):
-        documents = await db.get_documents(user_id=request.user_id)
         answer = _format_documents_answer(documents)
-        await db.insert_chat(user_id=request.user_id, message=answer, role="bot")
+        await db.insert_chat(user_id=workspace, message=answer, role="bot")
         if request.stream:
             return StreamingResponse(_stream_static_answer(answer), media_type="text/event-stream")
         return ChatResponse(answer=answer, sources=[])
 
-    context, sources = await _retrieve_context(request.user_id, request.message, db, embeddings)
+    context, sources = await _retrieve_context(workspace, request.message, db, embeddings, settings)
+    memory = _format_recent_memory(await db.get_recent_history(workspace, limit=12), request.message)
+    payload = RagAnswerInput(
+        workspace=workspace,
+        question=request.message,
+        context=context,
+        documents_summary=_format_active_documents(documents),
+        memory=memory,
+        sources=sources,
+    )
 
     if request.stream:
         return StreamingResponse(
-            _stream_and_save_answer(llm, db, request.user_id, context, request.message, sources),
+            _stream_and_save_answer(llm, db, workspace, payload, sources),
             media_type="text/event-stream",
         )
 
-    answer = await llm.answer(context=context, question=request.message)
-    await db.insert_chat(user_id=request.user_id, message=answer, role="bot")
+    answer = await llm.answer_rag(payload)
+    await db.insert_chat(user_id=workspace, message=answer, role="bot")
     return ChatResponse(answer=answer, sources=sources)
 
 
@@ -182,9 +482,12 @@ async def chat(
 async def create_or_update_widget(
     config: WidgetConfigRequest,
     request: Request,
+    user: dict = Depends(get_current_user),
     db: DatabaseService = Depends(get_db),
 ) -> dict:
-    widget = await db.upsert_widget(config.model_dump())
+    payload = config.model_dump()
+    payload["user_id"] = user["workspace"]
+    widget = await db.upsert_widget(payload)
     widget["embed_script"] = _embed_script(request, widget["widget_id"])
     return widget
 
@@ -193,9 +496,10 @@ async def create_or_update_widget(
 async def widget_for_user(
     request: Request,
     user_id: str = Query(...),
+    user: dict = Depends(get_current_user),
     db: DatabaseService = Depends(get_db),
 ) -> dict | None:
-    widget = await db.get_widget_for_user(user_id=user_id)
+    widget = await db.get_widget_for_user(user_id=user["workspace"])
     if widget:
         widget["embed_script"] = _embed_script(request, widget["widget_id"])
     return widget
@@ -228,6 +532,7 @@ async def public_widget_config(widget_id: str, db: DatabaseService = Depends(get
 async def widget_chat(
     widget_id: str,
     request: WidgetChatRequest,
+    settings: Settings = Depends(get_settings),
     db: DatabaseService = Depends(get_db),
     embeddings: EmbeddingService = Depends(get_embeddings),
     llm: LLMService = Depends(get_llm),
@@ -263,7 +568,7 @@ async def widget_chat(
             return StreamingResponse(_stream_static_answer(answer), media_type="text/event-stream")
         return ChatResponse(answer=answer, sources=[])
 
-    context, sources = await _retrieve_context(owner_user_id, request.message, db, embeddings)
+    context, sources = await _retrieve_context(owner_user_id, request.message, db, embeddings, settings)
 
     if request.stream:
         return StreamingResponse(
@@ -296,8 +601,8 @@ async def widget_chat(
 
 
 @router.get("/analytics", response_model=WidgetAnalytics)
-async def analytics(user_id: str = Query(...), db: DatabaseService = Depends(get_db)) -> dict:
-    rows = await db.get_widget_chats(user_id=user_id)
+async def analytics(user_id: str = Query(...), user: dict = Depends(get_current_user), db: DatabaseService = Depends(get_db)) -> dict:
+    rows = await db.get_widget_chats(user_id=user["workspace"])
     user_rows = [row for row in rows if row["role"] == "user"]
     bot_rows = [row for row in rows if row["role"] == "bot"]
     visitors = {row["visitor_id"] for row in rows}
@@ -348,8 +653,8 @@ async def analytics(user_id: str = Query(...), db: DatabaseService = Depends(get
 
 
 @router.get("/widget-history", response_model=WidgetHistory)
-async def widget_history(user_id: str = Query(...), db: DatabaseService = Depends(get_db)) -> dict:
-    rows = sorted(await db.get_widget_chats(user_id=user_id, limit=800), key=lambda row: row["timestamp"], reverse=True)
+async def widget_history(user_id: str = Query(...), user: dict = Depends(get_current_user), db: DatabaseService = Depends(get_db)) -> dict:
+    rows = sorted(await db.get_widget_chats(user_id=user["workspace"], limit=800), key=lambda row: row["timestamp"], reverse=True)
     grouped: dict[str, dict] = {}
     for row in rows:
         visitor_id = row["visitor_id"]
@@ -382,11 +687,32 @@ async def _retrieve_context(
     question: str,
     db: DatabaseService,
     embeddings: EmbeddingService,
+    settings: Settings,
 ) -> tuple[str, list[str]]:
     query_embedding = await embeddings.embed_query(question)
-    matches = await db.match_chunks(user_id=user_id, embedding=query_embedding, top_k=5)
-    context = "\n\n".join(match["chunk_text"] for match in matches)
-    sources = sorted({match["document_id"] for match in matches})
+    matches = await db.match_chunks(user_id=user_id, embedding=query_embedding, top_k=settings.retrieval_match_count)
+    ranked = _rerank_matches(
+        question,
+        matches,
+        limit=settings.retrieval_context_count,
+        min_similarity=settings.retrieval_min_similarity,
+    )
+    document_map = await db.get_document_map(user_id)
+    context_blocks: list[str] = []
+    sources: list[str] = []
+    for index, match in enumerate(ranked, start=1):
+        document_id = str(match["document_id"])
+        document = document_map.get(document_id, {})
+        source_marker = f"S{index}"
+        file_name = document.get("file_name") or f"Document {document_id}"
+        similarity = float(match.get("similarity") or 0)
+        sources.append(f"[{source_marker}] {file_name}")
+        context_blocks.append(
+            f"[{source_marker}] File: {file_name}\n"
+            f"Relevance: {similarity:.3f}\n"
+            f"Excerpt:\n{match['chunk_text']}"
+        )
+    context = "\n\n---\n\n".join(context_blocks)
     return context, sources
 
 
@@ -435,14 +761,13 @@ async def _stream_and_save_answer(
     llm: LLMService,
     db: DatabaseService,
     user_id: str,
-    context: str,
-    question: str,
+    payload: RagAnswerInput,
     sources: list[str],
 ) -> AsyncIterator[str]:
     answer_parts: list[str] = []
     yield f"event: sources\ndata: {json.dumps(sources)}\n\n"
     try:
-        async for token in llm.stream_answer(context=context, question=question):
+        async for token in llm.stream_rag_answer(payload):
             answer_parts.append(token)
             yield f"data: {json.dumps(token)}\n\n"
     except ExternalServiceError as exc:
@@ -454,19 +779,20 @@ async def _stream_and_save_answer(
 
 
 @router.get("/history", response_model=list[HistoryItem])
-async def history(user_id: str = Query(...), db: DatabaseService = Depends(get_db)) -> list[dict]:
-    return await db.get_history(user_id=user_id)
+async def history(user_id: str = Query(...), user: dict = Depends(get_current_user), db: DatabaseService = Depends(get_db)) -> list[dict]:
+    return await db.get_history(user_id=user["workspace"])
 
 
 @router.get("/documents", response_model=list[DocumentItem])
-async def documents(user_id: str = Query(...), db: DatabaseService = Depends(get_db)) -> list[dict]:
-    return await db.get_documents(user_id=user_id)
+async def documents(user_id: str = Query(...), user: dict = Depends(get_current_user), db: DatabaseService = Depends(get_db)) -> list[dict]:
+    return await db.get_documents(user_id=user["workspace"])
 
 
 @router.delete("/documents/{document_id}", status_code=204)
 async def delete_document(
     document_id: str,
     user_id: str = Query(...),
+    user: dict = Depends(get_current_user),
     db: DatabaseService = Depends(get_db),
 ) -> None:
-    await db.delete_document(user_id=user_id, document_id=document_id)
+    await db.delete_document(user_id=user["workspace"], document_id=document_id)

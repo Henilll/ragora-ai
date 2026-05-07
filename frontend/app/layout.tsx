@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "PDF RAG Assistant",
-  description: "Ask questions over your uploaded PDFs with Mistral, Groq, and Supabase pgvector.",
+  title: "Ragora | AI Knowledge OS",
+  description:
+    "Ragora turns documents, websites, and workflows into trusted AI assistants with analytics, security, and embeddable customer experiences.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

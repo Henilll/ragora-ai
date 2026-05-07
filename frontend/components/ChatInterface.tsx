@@ -1,18 +1,20 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Loader2, SendHorizonal, Bot, User } from "lucide-react";
-import type { ChatMessage } from "@/lib/api";
+import { motion } from "framer-motion";
+import { Loader2, SendHorizonal, Bot, User, Sparkles } from "lucide-react";
+import type { ChatMessage, DocumentItem } from "@/lib/api";
 import { streamChat } from "@/lib/api";
 
 type Props = {
   userId: string;
   messages: ChatMessage[];
+  documents: DocumentItem[];
   onMessagesChange: (messages: ChatMessage[]) => void;
   onRefreshHistory: () => Promise<void>;
 };
 
-export function ChatInterface({ userId, messages, onMessagesChange, onRefreshHistory }: Props) {
+export function ChatInterface({ userId, messages, documents, onMessagesChange, onRefreshHistory }: Props) {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,58 +62,103 @@ export function ChatInterface({ userId, messages, onMessagesChange, onRefreshHis
     }
   }
 
+  const suggestions = [
+    "Summarize the uploaded knowledge base",
+    "What questions can this assistant answer?",
+    "List the uploaded documents",
+  ];
+  const readyDocuments = documents.filter((document) => (document.status ?? "ready") === "ready");
+  const processingDocuments = documents.filter((document) => document.status === "processing");
+
   return (
-    <section style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+    <section className="relative" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(139,92,246,0.12),transparent_30rem)]" />
       {/* Header */}
       <div
-        style={{
-          padding: "1.125rem 1.5rem",
-          borderBottom: "1px solid var(--border-subtle)",
-          background: "var(--surface-1)",
-          flexShrink: 0,
-        }}
+        className="relative z-10 border-b border-white/10 bg-slate-950/45 px-5 py-4 backdrop-blur-xl"
+        style={{ flexShrink: 0 }}
       >
+        <div className="mx-auto flex max-w-4xl items-center justify-between gap-4">
         <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
           <div
             style={{
-              width: 30,
-              height: 30,
+              width: 34,
+              height: 34,
               borderRadius: 8,
-              background: "var(--accent-dim)",
-              border: "1px solid rgba(99,102,241,0.2)",
+              background: "#fff",
+              color: "#080b14",
+              border: "1px solid rgba(255,255,255,0.2)",
               display: "grid",
               placeItems: "center",
             }}
           >
-            <Bot size={15} style={{ color: "var(--accent-light)" }} />
+            <Bot size={16} />
           </div>
           <div>
-            <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--text-primary)" }}>Playground</p>
-            <p style={{ fontSize: "0.6875rem", color: "var(--text-tertiary)" }}>Answers scoped to your uploaded documents</p>
+            <p className="text-sm font-semibold text-white">Ragora Playground</p>
+            <p className="text-xs text-slate-500">Answers scoped to {userId}&apos;s uploaded documents</p>
           </div>
+        </div>
+        <div className="hidden items-center gap-2 sm:flex">
+          {processingDocuments.length > 0 && (
+            <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs font-semibold text-amber-100">
+              {processingDocuments.length} processing
+            </span>
+          )}
+          <span className="rounded-full border border-violet-300/20 bg-violet-300/10 px-3 py-1 text-xs font-semibold text-violet-100">
+            {readyDocuments.length} active {readyDocuments.length === 1 ? "file" : "files"}
+          </span>
+        </div>
         </div>
       </div>
 
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem" }}>
-        <div style={{ maxWidth: 720, margin: "0 auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <div className="relative z-10" style={{ flex: 1, overflowY: "auto", padding: "1.5rem" }}>
+        <div style={{ maxWidth: 820, margin: "0 auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
           {messages.length === 0 ? (
-            <div
-              className="card"
-              style={{ padding: "2rem", textAlign: "center" }}
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="glass rounded-xl p-6 text-center sm:p-8"
             >
-              <Bot size={26} style={{ color: "var(--text-tertiary)", margin: "0 auto 0.75rem" }} />
-              <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", fontWeight: 500 }}>
-                Ask anything from your documents
+              <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-xl bg-white text-slate-950 shadow-[0_0_50px_rgba(196,181,253,0.25)]">
+                <Sparkles size={20} />
+              </div>
+              <p className="text-lg font-semibold text-white">Test your knowledge assistant</p>
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-400">
+                {readyDocuments.length > 0
+                  ? "Your uploaded files are attached to this workspace. Ask realistic buyer, support, or internal questions and verify grounded answers."
+                  : "Upload a PDF from the sidebar and Ragora will automatically attach it to this workspace."}
               </p>
-              <p style={{ fontSize: "0.8125rem", color: "var(--text-tertiary)", marginTop: "0.25rem" }}>
-                Upload a PDF in the left sidebar to get started.
-              </p>
-            </div>
+              {readyDocuments.length > 0 && (
+                <div className="mx-auto mt-5 flex max-w-xl flex-wrap justify-center gap-2">
+                  {readyDocuments.slice(0, 5).map((document) => (
+                    <span key={document.id} className="rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-xs font-medium text-teal-100">
+                      {document.file_name}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="mt-6 grid gap-2 sm:grid-cols-3">
+                {suggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() => setInput(suggestion)}
+                    className="rounded-lg border border-white/10 bg-white/[0.045] px-3 py-3 text-left text-xs leading-5 text-slate-300 transition hover:border-white/20 hover:bg-white/[0.075]"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
           ) : (
             messages.map((message, index) => (
-              <div
+              <motion.div
                 key={message.id ?? `${message.role}-${index}`}
+                initial={{ opacity: 0, y: 8, scale: 0.99 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.22, ease: "easeOut" }}
                 style={{
                   display: "flex",
                   justifyContent: message.role === "user" ? "flex-end" : "flex-start",
@@ -137,6 +184,7 @@ export function ChatInterface({ userId, messages, onMessagesChange, onRefreshHis
                   </div>
                 )}
                 <div
+                  className={message.role === "bot" ? "shadow-[0_20px_70px_rgba(0,0,0,0.20)]" : ""}
                   style={{
                     maxWidth: "78%",
                     padding: "0.75rem 1rem",
@@ -181,7 +229,7 @@ export function ChatInterface({ userId, messages, onMessagesChange, onRefreshHis
                     <User size={13} style={{ color: "var(--text-secondary)" }} />
                   </div>
                 )}
-              </div>
+              </motion.div>
             ))
           )}
           <div ref={scrollRef} />
@@ -190,16 +238,13 @@ export function ChatInterface({ userId, messages, onMessagesChange, onRefreshHis
 
       {/* Input */}
       <div
-        style={{
-          padding: "1rem 1.5rem",
-          borderTop: "1px solid var(--border-subtle)",
-          background: "var(--surface-1)",
-          flexShrink: 0,
-        }}
+        className="relative z-10 border-t border-white/10 bg-slate-950/55 px-5 py-4 backdrop-blur-xl"
+        style={{ flexShrink: 0 }}
       >
         <form
           onSubmit={handleSubmit}
-          style={{ maxWidth: 720, margin: "0 auto", display: "flex", gap: "0.625rem", alignItems: "flex-end" }}
+          className="rounded-xl border border-white/10 bg-white/[0.045] p-2 shadow-[0_20px_80px_rgba(0,0,0,0.28)]"
+          style={{ maxWidth: 820, margin: "0 auto", display: "flex", gap: "0.625rem", alignItems: "flex-end" }}
         >
           <textarea
             value={input}
@@ -215,6 +260,8 @@ export function ChatInterface({ userId, messages, onMessagesChange, onRefreshHis
             className="inp"
             style={{
               flex: 1,
+              border: "none",
+              background: "transparent",
               resize: "none",
               minHeight: "2.625rem",
               maxHeight: "9rem",

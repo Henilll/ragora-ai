@@ -1,5 +1,6 @@
 from uuid import uuid4
 import secrets
+from datetime import datetime
 
 import httpx
 
@@ -27,17 +28,127 @@ class DatabaseService:
     async def close(self) -> None:
         await self._client.aclose()
 
-    async def create_document(self, user_id: str, file_name: str) -> str:
+    async def create_document(self, user_id: str, file_name: str, file_hash: str = "", status: str = "processing") -> str:
         document_id = str(uuid4())
         await self._request(
             "POST",
             "documents",
-            json={"id": document_id, "user_id": user_id, "file_name": file_name, "chunk_count": 0},
+            json={
+                "id": document_id,
+                "user_id": user_id,
+                "file_name": file_name,
+                "file_hash": file_hash,
+                "chunk_count": 0,
+                "status": status,
+            },
         )
         return document_id
 
-    async def update_document_chunk_count(self, document_id: str, chunk_count: int) -> None:
-        await self._request("PATCH", "documents", params={"id": f"eq.{document_id}"}, json={"chunk_count": chunk_count})
+    async def get_user_by_email(self, email: str) -> dict | None:
+        response = await self._request(
+            "GET",
+            "users",
+            params={"select": "*", "email": f"eq.{email.lower()}", "limit": "1"},
+        )
+        rows = response.json()
+        return rows[0] if rows else None
+
+    async def get_user_by_id(self, user_id: str) -> dict | None:
+        response = await self._request(
+            "GET",
+            "users",
+            params={"select": "*", "id": f"eq.{user_id}", "limit": "1"},
+        )
+        rows = response.json()
+        return rows[0] if rows else None
+
+    async def create_user(
+        self,
+        email: str,
+        name: str,
+        workspace: str,
+        provider: str,
+        password_hash: str | None = None,
+        avatar_url: str = "",
+        email_verified: bool = False,
+        google_sub: str = "",
+    ) -> dict:
+        response = await self._request(
+            "POST",
+            "users",
+            json={
+                "email": email.lower(),
+                "name": name,
+                "workspace": workspace,
+                "provider": provider,
+                "password_hash": password_hash,
+                "avatar_url": avatar_url,
+                "email_verified": email_verified,
+                "google_sub": google_sub,
+            },
+        )
+        return response.json()[0]
+
+    async def update_user(self, user_id: str, payload: dict) -> dict:
+        response = await self._request("PATCH", "users", params={"id": f"eq.{user_id}"}, json=payload)
+        return response.json()[0]
+
+    async def create_refresh_session(
+        self,
+        user_id: str,
+        token_hash: str,
+        expires_at: datetime,
+        user_agent: str = "",
+    ) -> None:
+        await self._request(
+            "POST",
+            "refresh_sessions",
+            json={
+                "user_id": user_id,
+                "token_hash": token_hash,
+                "expires_at": expires_at.isoformat(),
+                "user_agent": user_agent[:300],
+            },
+        )
+
+    async def get_refresh_session(self, token_hash: str) -> dict | None:
+        response = await self._request(
+            "GET",
+            "refresh_sessions",
+            params={"select": "*", "token_hash": f"eq.{token_hash}", "revoked_at": "is.null", "limit": "1"},
+        )
+        rows = response.json()
+        return rows[0] if rows else None
+
+    async def revoke_refresh_session(self, token_hash: str) -> None:
+        await self._request(
+            "PATCH",
+            "refresh_sessions",
+            params={"token_hash": f"eq.{token_hash}", "revoked_at": "is.null"},
+            json={"revoked_at": datetime.utcnow().isoformat()},
+        )
+
+    async def update_document_chunk_count(self, document_id: str, chunk_count: int, status: str = "ready") -> None:
+        await self._request(
+            "PATCH",
+            "documents",
+            params={"id": f"eq.{document_id}"},
+            json={"chunk_count": chunk_count, "status": status},
+        )
+
+    async def update_document_status(self, document_id: str, status: str) -> None:
+        await self._request("PATCH", "documents", params={"id": f"eq.{document_id}"}, json={"status": status})
+
+    async def get_document_by_hash(self, user_id: str, file_hash: str) -> dict | None:
+        if not file_hash:
+            return None
+        response = await self._request(
+            "GET",
+            "documents",
+            params={"select": "*", "user_id": f"eq.{user_id}", "file_hash": f"eq.{file_hash}", "limit": "1"},
+        )
+        rows = response.json()
+        return rows[0] if rows else None
 
     async def insert_chunks(
         self,
@@ -103,6 +214,14 @@ class DatabaseService:
         )
         return response.json()
 
+    async def get_recent_history(self, user_id: str, limit: int = 12) -> list[dict]:
+        response = await self._request(
+            "GET",
+            "chats",
+            params={"select": "*", "user_id": f"eq.{user_id}", "order": "timestamp.desc", "limit": str(limit)},
+        )
+        return list(reversed(response.json()))
+
     async def get_documents(self, user_id: str) -> list[dict]:
         response = await self._request(
             "GET",
@@ -110,6 +229,10 @@ class DatabaseService:
             params={"select": "*", "user_id": f"eq.{user_id}", "order": "created_at.desc"},
         )
         return response.json()
+
+    async def get_document_map(self, user_id: str) -> dict[str, dict]:
+        documents = await self.get_documents(user_id)
+        return {document["id"]: document for document in documents}
 
     async def upsert_widget(self, config: dict) -> dict:
         existing = await self.get_widget_for_user(config["user_id"])
