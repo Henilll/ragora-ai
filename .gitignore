@@ -9,4 +9,4 @@ dist/
 build/
 .env.example
 .env.local
-*.zip
+*.zip*.zip
