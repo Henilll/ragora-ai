@@ -1,0 +1,316 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Bot, Copy, Loader2, MessageCircle, Palette, Sparkles, SlidersHorizontal, UploadCloud, Check } from "lucide-react";
+import type { WidgetConfig } from "@/lib/api";
+import { getWidget, saveWidget } from "@/lib/api";
+
+type Props = { userId: string };
+type WidgetForm = Omit<WidgetConfig, "widget_id" | "embed_script">;
+
+const DEFAULT_WIDGET = {
+  title: "Ask AI",
+  welcome_message: "Hi. Ask me anything from these documents.",
+  theme: "dark" as const,
+  accent_color: "#6366f1",
+  secondary_color: "#0f172a",
+  logo_url: "",
+  icon_label: "AI",
+  launcher_style: "pill" as const,
+  border_radius: 14,
+  launcher_label: "Chat with AI",
+  input_placeholder: "Ask a question",
+  position: "bottom-right" as const,
+  bot_goal: "Answer visitor questions using the uploaded documents.",
+  bot_role: "customer_support",
+  tone: "professional",
+  custom_instructions: "",
+  fallback_message: "I do not know based on the provided documents.",
+  collect_leads: false,
+  is_enabled: true,
+};
+
+const TEMPLATES = [
+  { name: "Customer Care", role: "customer_support", goal: "Help website visitors understand services, answer common questions, collect issue details, and guide them to the right next step.", welcome: "Hi. I can help with questions about our services, support, and next steps.", fallback: "I do not have that information yet. Please share your email or contact support.", color: "#6366f1" },
+  { name: "HR Policies", role: "hr_policy_assistant", goal: "Help employees understand HR policies, benefits, leave rules, onboarding steps, and internal process guidance.", welcome: "Hi. Ask me about HR policies, benefits, leave, or onboarding.", fallback: "I cannot confirm that from the available policy information. Please contact HR.", color: "#8b5cf6" },
+  { name: "Sales Assistant", role: "sales_assistant", goal: "Qualify leads, explain offerings, answer product questions, and encourage visitors to book a demo.", welcome: "Hi. I can help you find the right solution or book a demo.", fallback: "I do not have that detail yet. I can collect your contact details for the sales team.", color: "#0ea5e9" },
+  { name: "Support Desk", role: "technical_support", goal: "Troubleshoot common product issues, ask clarifying questions, and escalate when the answer is not available.", welcome: "Hi. Tell me what is not working and I will help troubleshoot.", fallback: "I do not have a documented fix for that yet. Please share the error and contact details.", color: "#f59e0b" },
+  { name: "Company FAQ", role: "internal_knowledge_base", goal: "Answer company, service, pricing, policy, and process FAQs.", welcome: "Hi. Ask me anything from this company's FAQ and documents.", fallback: "I do not know that from the available information yet.", color: "#10b981" },
+];
+
+function Section({ icon: Icon, title, children }: { icon: typeof Bot; title: string; children: React.ReactNode }) {
+  return (
+    <div className="card-sm" style={{ padding: "1.125rem" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.875rem" }}>
+        <Icon size={14} style={{ color: "var(--accent-light)" }} />
+        <p style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-primary)" }}>{title}</p>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>{children}</div>
+    </div>
+  );
+}
+
+export function WidgetEmbed({ userId }: Props) {
+  const [widget, setWidget] = useState<WidgetConfig | null>(null);
+  const [form, setForm] = useState<WidgetForm>({ user_id: userId, ...DEFAULT_WIDGET });
+  const [isSaving, setIsSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setForm((c) => ({ ...c, user_id: userId }));
+    void loadWidget();
+  }, [userId]);
+
+  async function loadWidget() {
+    const existing = await getWidget(userId);
+    if (!existing) return;
+    setWidget(existing);
+    setForm({ user_id: userId, title: existing.title, welcome_message: existing.welcome_message, theme: existing.theme, accent_color: existing.accent_color, secondary_color: existing.secondary_color, logo_url: existing.logo_url, icon_label: existing.icon_label, launcher_style: existing.launcher_style, border_radius: existing.border_radius, launcher_label: existing.launcher_label, input_placeholder: existing.input_placeholder, position: existing.position, bot_goal: existing.bot_goal, bot_role: existing.bot_role, tone: existing.tone, custom_instructions: existing.custom_instructions, fallback_message: existing.fallback_message, collect_leads: existing.collect_leads, is_enabled: existing.is_enabled });
+  }
+
+  async function handleSave() {
+    setIsSaving(true);
+    setError(null);
+    try {
+      const saved = await saveWidget(form);
+      setWidget(saved);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save widget");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function copyScript() {
+    if (!widget?.embed_script) return;
+    await navigator.clipboard.writeText(widget.embed_script);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1600);
+  }
+
+  function applyTemplate(t: typeof TEMPLATES[number]) {
+    setForm({ ...form, title: t.name, launcher_label: t.name === "Sales Assistant" ? "Talk to Sales" : "Ask AI", bot_role: t.role, bot_goal: t.goal, welcome_message: t.welcome, fallback_message: t.fallback, accent_color: t.color, icon_label: t.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase() });
+  }
+
+  function handleLogoFile(file: File) {
+    if (!file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = () => setForm((c) => ({ ...c, logo_url: String(reader.result) }));
+    reader.readAsDataURL(file);
+  }
+
+  return (
+    <section className="card" style={{ padding: "1.5rem" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: "var(--accent-dim)", border: "1px solid rgba(99,102,241,0.2)", display: "grid", placeItems: "center" }}>
+            <MessageCircle size={15} style={{ color: "var(--accent-light)" }} />
+          </div>
+          <div>
+            <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--text-primary)" }}>Chatbot Builder</p>
+            <p style={{ fontSize: "0.75rem", color: "var(--text-tertiary)" }}>Configure and embed your AI widget</p>
+          </div>
+        </div>
+        <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+          <div
+            style={{
+              width: 36,
+              height: 20,
+              borderRadius: 999,
+              background: form.is_enabled ? "var(--accent)" : "var(--surface-3)",
+              border: "1px solid var(--border-default)",
+              position: "relative",
+              transition: "background 0.15s",
+              cursor: "pointer",
+            }}
+            onClick={() => setForm({ ...form, is_enabled: !form.is_enabled })}
+          >
+            <div
+              style={{
+                position: "absolute",
+                top: 2,
+                left: form.is_enabled ? 18 : 2,
+                width: 14,
+                height: 14,
+                borderRadius: "50%",
+                background: "#fff",
+                transition: "left 0.15s",
+              }}
+            />
+          </div>
+          <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 500 }}>
+            {form.is_enabled ? "Live" : "Paused"}
+          </span>
+        </label>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        {/* Templates */}
+        <div className="card-sm" style={{ padding: "1.125rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.875rem" }}>
+            <Sparkles size={14} style={{ color: "var(--accent-light)" }} />
+            <p style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-primary)" }}>Quick-start Templates</p>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+            {TEMPLATES.map((t) => (
+              <button
+                key={t.name}
+                type="button"
+                onClick={() => applyTemplate(t)}
+                style={{
+                  padding: "0.375rem 0.75rem",
+                  borderRadius: 6,
+                  border: `1px solid ${t.color}30`,
+                  background: `${t.color}10`,
+                  color: t.color,
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "background 0.15s, border-color 0.15s",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.375rem",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = `${t.color}20`;
+                  (e.currentTarget as HTMLButtonElement).style.borderColor = `${t.color}50`;
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = `${t.color}10`;
+                  (e.currentTarget as HTMLButtonElement).style.borderColor = `${t.color}30`;
+                }}
+              >
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: t.color, flexShrink: 0 }} />
+                {t.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Appearance */}
+        <Section icon={Palette} title="Appearance">
+          {/* Logo */}
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <div
+              style={{ width: 48, height: 48, borderRadius: 8, background: form.accent_color || "var(--accent)", display: "grid", placeItems: "center", fontSize: "0.875rem", fontWeight: 700, color: "#fff", flexShrink: 0, cursor: "pointer", position: "relative", overflow: "hidden" }}
+              onClick={() => {
+                const inp = document.createElement("input");
+                inp.type = "file"; inp.accept = "image/*";
+                inp.onchange = (e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) handleLogoFile(f); };
+                inp.click();
+              }}
+            >
+              {form.logo_url ? <img src={form.logo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : form.icon_label}
+            </div>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+              <input className="inp" value={form.logo_url} onChange={(e) => setForm({ ...form, logo_url: e.target.value })} placeholder="Logo URL or click preview to upload" />
+              <input className="inp" value={form.icon_label} onChange={(e) => setForm({ ...form, icon_label: e.target.value.slice(0, 3).toUpperCase() })} placeholder="Icon letters (max 3)" />
+            </div>
+          </div>
+          <input className="inp" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Widget title" />
+          <input className="inp" value={form.launcher_label} onChange={(e) => setForm({ ...form, launcher_label: e.target.value })} placeholder="Launcher button label" />
+          <input className="inp" value={form.input_placeholder} onChange={(e) => setForm({ ...form, input_placeholder: e.target.value })} placeholder="Input placeholder text" />
+          <textarea className="inp" value={form.welcome_message} onChange={(e) => setForm({ ...form, welcome_message: e.target.value })} rows={2} placeholder="Welcome message" style={{ resize: "none" }} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto auto", gap: "0.5rem" }}>
+            <select className="inp" value={form.theme} onChange={(e) => setForm({ ...form, theme: e.target.value as "dark" | "light" })}>
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+            </select>
+            <select className="inp" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value as "bottom-right" | "bottom-left" })}>
+              <option value="bottom-right">Bottom Right</option>
+              <option value="bottom-left">Bottom Left</option>
+            </select>
+            <div style={{ position: "relative" }}>
+              <input type="color" value={form.accent_color} onChange={(e) => setForm({ ...form, accent_color: e.target.value })} aria-label="Accent color" style={{ width: 42, height: 42, padding: 4, borderRadius: 8, border: "1px solid var(--border-default)", background: "var(--surface-0)", cursor: "pointer" }} />
+            </div>
+            <div style={{ position: "relative" }}>
+              <input type="color" value={form.secondary_color} onChange={(e) => setForm({ ...form, secondary_color: e.target.value })} aria-label="Header color" style={{ width: 42, height: 42, padding: 4, borderRadius: 8, border: "1px solid var(--border-default)", background: "var(--surface-0)", cursor: "pointer" }} />
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+            <select className="inp" value={form.launcher_style} onChange={(e) => setForm({ ...form, launcher_style: e.target.value as "pill" | "circle" })}>
+              <option value="pill">Pill Launcher</option>
+              <option value="circle">Circle Launcher</option>
+            </select>
+            <input className="inp" type="number" min={6} max={28} value={form.border_radius} onChange={(e) => setForm({ ...form, border_radius: Number(e.target.value) })} placeholder="Border radius" />
+          </div>
+        </Section>
+
+        {/* Behavior */}
+        <Section icon={Bot} title="Behavior">
+          <select className="inp" value={form.bot_role} onChange={(e) => setForm({ ...form, bot_role: e.target.value })}>
+            <option value="customer_support">Customer Care</option>
+            <option value="hr_policy_assistant">HR Policy Assistant</option>
+            <option value="sales_assistant">Sales Assistant</option>
+            <option value="internal_knowledge_base">Internal Knowledge Base</option>
+            <option value="technical_support">Technical Support</option>
+          </select>
+          <select className="inp" value={form.tone} onChange={(e) => setForm({ ...form, tone: e.target.value })}>
+            <option value="professional">Professional</option>
+            <option value="friendly">Friendly</option>
+            <option value="formal">Formal</option>
+            <option value="concise">Concise</option>
+            <option value="empathetic">Empathetic</option>
+          </select>
+          <textarea className="inp" value={form.bot_goal} onChange={(e) => setForm({ ...form, bot_goal: e.target.value })} rows={3} placeholder="Business goal — what should this bot accomplish?" style={{ resize: "none" }} />
+          <textarea className="inp" value={form.fallback_message} onChange={(e) => setForm({ ...form, fallback_message: e.target.value })} rows={2} placeholder="Message when no answer is found" style={{ resize: "none" }} />
+        </Section>
+
+        {/* Advanced */}
+        <Section icon={SlidersHorizontal} title="Advanced">
+          <textarea className="inp" value={form.custom_instructions} onChange={(e) => setForm({ ...form, custom_instructions: e.target.value })} rows={6} placeholder="Custom system instructions. Example: Ask for contact details before answering pricing questions." style={{ resize: "none" }} />
+          <label style={{ display: "flex", alignItems: "center", gap: "0.625rem", cursor: "pointer", padding: "0.625rem 0.75rem", borderRadius: 8, background: "var(--surface-0)", border: "1px solid var(--border-subtle)" }}>
+            <input type="checkbox" checked={form.collect_leads} onChange={(e) => setForm({ ...form, collect_leads: e.target.checked })} style={{ accentColor: "var(--accent)" }} />
+            <span style={{ fontSize: "0.8125rem", color: "var(--text-secondary)" }}>Collect lead / contact details when useful</span>
+          </label>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving}
+            className="btn-accent"
+            style={{ height: "2.625rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}
+          >
+            {isSaving ? <Loader2 size={15} className="animate-spin" /> : null}
+            {isSaving ? "Saving…" : "Save Chatbot"}
+          </button>
+          {error && <p style={{ fontSize: "0.75rem", color: "var(--danger)" }}>{error}</p>}
+        </Section>
+
+        {/* Embed code */}
+        {widget?.embed_script && (
+          <div className="card-sm" style={{ padding: "1.125rem" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
+              <p style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-primary)" }}>Embed Code</p>
+              <button
+                type="button"
+                onClick={copyScript}
+                className="btn-ghost"
+                style={{ height: "1.875rem", padding: "0 0.75rem", display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "0.75rem" }}
+              >
+                {copied ? <Check size={12} /> : <Copy size={12} />}
+                {copied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+            <pre
+              style={{
+                overflowX: "auto",
+                padding: "0.875rem",
+                borderRadius: 8,
+                background: "var(--surface-0)",
+                border: "1px solid var(--border-subtle)",
+                fontSize: "0.6875rem",
+                color: "var(--text-secondary)",
+                lineHeight: 1.6,
+                fontFamily: "'DM Mono', monospace",
+              }}
+            >
+              <code>{widget.embed_script}</code>
+            </pre>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
