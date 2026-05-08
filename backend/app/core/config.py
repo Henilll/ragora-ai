@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     bootstrap_admin_email: str = "support.ragora@gmail.com"
     bootstrap_admin_password: str = "RAGORA#@2026"
     key_rotation_cache_seconds: int = 30
+    widget_asset_bucket: str = "ragora-widget-assets"
     email_verification_minutes: int = 10
     smtp_host: str = ""
     smtp_port: int = 587

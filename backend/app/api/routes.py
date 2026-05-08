@@ -33,6 +33,7 @@ from app.models.schemas import (
     ResetPasswordRequest,
     SignupRequest,
     StatusResponse,
+    SupabaseAuthRequest,
     UploadResponse,
     VerifyEmailRequest,
     WidgetChatRequest,
@@ -50,6 +51,7 @@ from app.services.auth import (
     refresh_token_hash,
     verify_google_id_token,
     verify_password,
+    verify_supabase_access_token,
 )
 from app.services.chunking import chunk_text
 from app.services.db import DatabaseService
@@ -61,6 +63,13 @@ from app.services.pdf import extract_pdf_text
 router = APIRouter()
 WIDGET_SCRIPT_PATH = Path(__file__).resolve().parents[1] / "static" / "widget.js"
 RAGORA_SCRIPT_PATH = Path(__file__).resolve().parents[1] / "static" / "ragora-chat.js"
+LOGO_CONTENT_TYPES = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+    "image/gif": "gif",
+}
+MAX_WIDGET_LOGO_BYTES = 1_000_000
 
 
 def _normalize_message(message: str) -> str:
@@ -380,6 +389,40 @@ async def google_auth(
     return await _issue_session(user, request, settings, db)
 
 
+@router.post("/auth/supabase", response_model=AuthResponse)
+async def supabase_auth(
+    payload: SupabaseAuthRequest,
+    request: Request,
+    settings: Settings = Depends(get_settings),
+    db: DatabaseService = Depends(get_db),
+) -> AuthResponse:
+    profile = await verify_supabase_access_token(payload.access_token, settings)
+    if not profile["email_verified"]:
+        raise HTTPException(status_code=403, detail="Please confirm your email before signing in.")
+
+    user = await db.get_user_by_email(profile["email"])
+    update = {
+        "name": profile["name"],
+        "provider": profile["provider"],
+        "avatar_url": profile["avatar_url"],
+        "email_verified": True,
+        "google_sub": profile["google_sub"],
+    }
+    if user:
+        user = await db.update_user(user["id"], update)
+    else:
+        user = await db.create_user(
+            email=profile["email"],
+            name=profile["name"],
+            workspace=_workspace_slug(profile["email"]),
+            provider=profile["provider"],
+            avatar_url=profile["avatar_url"],
+            email_verified=True,
+            google_sub=profile["google_sub"],
+        )
+    return await _issue_session(user, request, settings, db)
+
+
 @router.post("/auth/refresh", response_model=AuthResponse)
 async def refresh_session(
     payload: RefreshRequest,
@@ -634,6 +677,32 @@ async def create_or_update_widget(
     widget = await db.upsert_widget(payload)
     widget["embed_script"] = _embed_script(request, widget["widget_id"])
     return widget
+
+
+@router.post("/widgets/logo")
+async def upload_widget_logo(
+    file: UploadFile = File(...),
+    user: dict = Depends(get_current_user),
+    db: DatabaseService = Depends(get_db),
+) -> dict:
+    content_type = (file.content_type or "").lower()
+    extension = LOGO_CONTENT_TYPES.get(content_type)
+    if not extension:
+        raise HTTPException(status_code=415, detail="Upload a PNG, JPG, WebP, or GIF logo.")
+
+    content = await file.read(MAX_WIDGET_LOGO_BYTES + 1)
+    if len(content) > MAX_WIDGET_LOGO_BYTES:
+        raise HTTPException(status_code=413, detail="Logo must be 1 MB or smaller.")
+    if not content:
+        raise HTTPException(status_code=400, detail="Logo file is empty.")
+
+    logo_url = await db.upload_widget_logo(
+        user_id=user["workspace"],
+        content=content,
+        content_type=content_type,
+        extension=extension,
+    )
+    return {"logo_url": logo_url}
 
 
 @router.get("/widgets", response_model=WidgetConfig | None)

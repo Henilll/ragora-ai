@@ -1,3 +1,5 @@
+import { isSupabaseAuthConfigured, supabase } from "@/lib/supabase";
+
 export type AuthProvider = "email" | "google";
 
 export type AuthUser = {
@@ -22,6 +24,7 @@ export type AuthSession = {
 const SESSION_KEY = "ragora_session";
 const LEGACY_USER_KEY = "rag_user_id";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const PKCE_STORAGE_ERROR = "PKCE code verifier not found";
 
 async function readError(response: Response) {
   const text = await response.text();
@@ -73,32 +76,116 @@ export function getAccessToken() {
 export function clearSession() {
   localStorage.removeItem(SESSION_KEY);
   localStorage.removeItem(LEGACY_USER_KEY);
+  if (isSupabaseAuthConfigured) void supabase.auth.signOut();
 }
 
-export async function loginWithEmail(email: string, password: string) {
+async function bridgeSupabaseAccessToken(accessToken: string) {
+  const session = await authRequest<AuthSession>("/auth/supabase", { access_token: accessToken });
+  saveSession(session);
+  return session;
+}
+
+function requireSupabaseAuth() {
+  if (!isSupabaseAuthConfigured) {
+    throw new Error("Supabase Auth is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+  }
+}
+
+async function loginWithBackendEmail(email: string, password: string) {
   const session = await authRequest<AuthSession>("/auth/login", { email, password });
   saveSession(session);
   return session;
 }
 
-export async function signupWithEmail(name: string, email: string, password: string) {
-  const session = await authRequest<AuthSession>("/auth/signup", { name, email, password });
-  saveSession(session);
-  return session;
+function isPkceStorageError(error: unknown) {
+  return error instanceof Error && error.message.includes(PKCE_STORAGE_ERROR);
 }
 
-export async function loginWithGoogle(idToken: string) {
-  const session = await authRequest<AuthSession>("/auth/google", { id_token: idToken });
-  saveSession(session);
-  return session;
+function staleAuthLinkError() {
+  return new Error("This sign-in link is no longer valid in this browser. Please sign in again from this page.");
+}
+
+export async function finishSupabaseAuth() {
+  requireSupabaseAuth();
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw isPkceStorageError(error) ? staleAuthLinkError() : new Error(error.message);
+  if (!data.session?.access_token) throw new Error("No Supabase session found.");
+  return bridgeSupabaseAccessToken(data.session.access_token);
+}
+
+export async function exchangeSupabaseCode(code: string | null) {
+  requireSupabaseAuth();
+  if (!code) return;
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  if (error) throw isPkceStorageError(error) ? staleAuthLinkError() : new Error(error.message);
+}
+
+export async function completeSupabaseRedirect(code: string | null) {
+  if (code) {
+    await exchangeSupabaseCode(code);
+  }
+  return finishSupabaseAuth();
+}
+
+export async function loginWithEmail(email: string, password: string) {
+  if (!isSupabaseAuthConfigured) {
+    return loginWithBackendEmail(email, password);
+  }
+
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) {
+    return loginWithBackendEmail(email, password);
+  }
+  if (!data.session?.access_token) throw new Error("Please confirm your email before signing in.");
+  return bridgeSupabaseAccessToken(data.session.access_token);
+}
+
+export async function signupWithEmail(name: string, email: string, password: string) {
+  requireSupabaseAuth();
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: { full_name: name },
+      emailRedirectTo: `${window.location.origin}/auth/callback`,
+    },
+  });
+  if (error) throw new Error(error.message);
+  if (!data.session?.access_token) {
+    return { needsEmailConfirmation: true };
+  }
+  return bridgeSupabaseAccessToken(data.session.access_token);
+}
+
+export async function loginWithGoogle() {
+  requireSupabaseAuth();
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${window.location.origin}/auth/callback`,
+      queryParams: {
+        access_type: "offline",
+        prompt: "select_account",
+      },
+    },
+  });
+  if (error) throw new Error(error.message);
 }
 
 export async function forgotPassword(email: string) {
-  return authRequest<{ ok: boolean; message: string }>("/auth/forgot-password", { email });
+  requireSupabaseAuth();
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/reset-password`,
+  });
+  if (error) throw new Error(error.message);
+  return { ok: true, message: "If that email exists, Supabase sent a reset link." };
 }
 
-export async function resetPassword(token: string, password: string) {
-  return authRequest<{ ok: boolean; message: string }>("/auth/reset-password", { token, password });
+export async function resetPassword(_token: string, password: string) {
+  requireSupabaseAuth();
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw new Error(error.message);
+  return { ok: true, message: "Password updated. You can sign in now." };
 }
 
 export async function verifyEmail(code: string) {

@@ -1,7 +1,7 @@
-from uuid import uuid4
-import secrets
 from datetime import datetime
 import random
+import secrets
+from uuid import uuid4
 
 import httpx
 
@@ -15,6 +15,7 @@ def _vector_literal(values: list[float]) -> str:
 
 class DatabaseService:
     def __init__(self, settings: Settings) -> None:
+        self._settings = settings
         self._client = httpx.AsyncClient(
             base_url=f"{settings.supabase_url.rstrip('/')}/rest/v1",
             headers={
@@ -25,10 +26,23 @@ class DatabaseService:
             },
             timeout=60,
         )
+        self._storage_client = httpx.AsyncClient(
+            base_url=settings.supabase_url.rstrip("/"),
+            headers={
+                "apikey": settings.supabase_service_role_key,
+                "Authorization": f"Bearer {settings.supabase_service_role_key}",
+            },
+            timeout=60,
+        )
+        self._asset_bucket_ready = False
         self._api_key_cache: dict[str, tuple[float, list[dict]]] = {}
+        self._api_key_inflight: dict[str, int] = {}
+        self._api_key_local_usage: dict[str, int] = {}
+        self._api_key_local_failures: dict[str, int] = {}
 
     async def close(self) -> None:
         await self._client.aclose()
+        await self._storage_client.aclose()
 
     async def create_document(self, user_id: str, file_name: str, file_hash: str = "", status: str = "processing") -> str:
         document_id = str(uuid4())
@@ -344,6 +358,55 @@ class DatabaseService:
         )
         return response.json()[0]
 
+    async def ensure_widget_asset_bucket(self) -> None:
+        if self._asset_bucket_ready:
+            return
+
+        bucket = self._settings.widget_asset_bucket
+        response = await self._storage_client.post(
+            "/storage/v1/bucket",
+            json={
+                "id": bucket,
+                "name": bucket,
+                "public": True,
+                "file_size_limit": 1_000_000,
+                "allowed_mime_types": ["image/png", "image/jpeg", "image/webp", "image/gif"],
+            },
+        )
+        if response.status_code not in {200, 201, 409}:
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                raise ExternalServiceError(
+                    service="Supabase Storage",
+                    status_code=exc.response.status_code,
+                    detail=exc.response.text,
+                ) from exc
+        self._asset_bucket_ready = True
+
+    async def upload_widget_logo(self, user_id: str, content: bytes, content_type: str, extension: str) -> str:
+        await self.ensure_widget_asset_bucket()
+        bucket = self._settings.widget_asset_bucket
+        path = f"logos/{user_id}/{uuid4().hex}.{extension}"
+        response = await self._storage_client.post(
+            f"/storage/v1/object/{bucket}/{path}",
+            headers={
+                "Content-Type": content_type,
+                "Cache-Control": "31536000",
+                "x-upsert": "true",
+            },
+            content=content,
+        )
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise ExternalServiceError(
+                service="Supabase Storage",
+                status_code=exc.response.status_code,
+                detail=exc.response.text,
+            ) from exc
+        return f"{self._settings.supabase_url.rstrip('/')}/storage/v1/object/public/{bucket}/{path}"
+
     async def get_widget_for_user(self, user_id: str) -> dict | None:
         response = await self._request(
             "GET",
@@ -449,16 +512,35 @@ class DatabaseService:
             return None
 
         excluded = exclude_ids or set()
-        weighted: list[dict] = []
-        for row in cached:
-            if row["id"] in excluded:
-                continue
-            weighted.extend([row] * max(1, int(row.get("weight") or 1)))
-        if not weighted:
+        candidates = [row for row in cached if row["id"] not in excluded]
+        if not candidates:
             return None
-        return random.choice(weighted)
+
+        def score(row: dict) -> float:
+            key_id = row["id"]
+            weight = max(1, int(row.get("weight") or 1))
+            usage = int(row.get("usage_count") or 0) + self._api_key_local_usage.get(key_id, 0)
+            failures = int(row.get("failure_count") or 0) + self._api_key_local_failures.get(key_id, 0)
+            inflight = self._api_key_inflight.get(key_id, 0)
+            return ((usage + (inflight * 2)) / weight) + (failures * 8) + random.random()
+
+        chosen = min(candidates, key=score)
+        key_id = chosen["id"]
+        self._api_key_inflight[key_id] = self._api_key_inflight.get(key_id, 0) + 1
+        self._api_key_local_usage[key_id] = self._api_key_local_usage.get(key_id, 0) + 1
+        return chosen
+
+    def _release_api_key(self, key_id: str) -> None:
+        current = self._api_key_inflight.get(key_id, 0)
+        if current <= 1:
+            self._api_key_inflight.pop(key_id, None)
+        else:
+            self._api_key_inflight[key_id] = current - 1
 
     async def record_api_key_success(self, key_id: str) -> None:
+        self._release_api_key(key_id)
+        if key_id in self._api_key_local_failures:
+            self._api_key_local_failures[key_id] = max(0, self._api_key_local_failures[key_id] - 1)
         await self._request(
             "POST",
             "rpc/increment_api_key_success",
@@ -466,6 +548,8 @@ class DatabaseService:
         )
 
     async def record_api_key_failure(self, key_id: str, error: str) -> None:
+        self._release_api_key(key_id)
+        self._api_key_local_failures[key_id] = self._api_key_local_failures.get(key_id, 0) + 1
         await self._request(
             "POST",
             "rpc/increment_api_key_failure",

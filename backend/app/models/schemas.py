@@ -83,6 +83,10 @@ class GoogleAuthRequest(BaseModel):
     id_token: str = Field(min_length=20)
 
 
+class SupabaseAuthRequest(BaseModel):
+    access_token: str = Field(min_length=20)
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str = Field(min_length=20)
 

@@ -10,7 +10,9 @@ import {
   DatabaseZap,
   FileSearch,
   Globe2,
+  Linkedin,
   LockKeyhole,
+  Mail,
   MessageSquareText,
   Play,
   ShieldCheck,
@@ -20,6 +22,12 @@ import {
 import { useState } from "react";
 
 const companies = ["Northstar", "Vanta Labs", "Pulse", "Evervault", "Layer", "Kairo"];
+
+const developer = {
+  name: "Henil Bhavsar",
+  linkedin: "https://www.linkedin.com/in/henil-bhavsar-18b45b311/",
+  email: "henilbhavsar164@gmail.com",
+};
 
 const features = [
   {
@@ -55,9 +63,9 @@ const features = [
 ];
 
 const testimonials = [
-  { quote: "Ragora made our help center feel alive in one afternoon. The quality bar feels like a product we would happily pay for.", name: "Maya Chen", role: "Founder, LayerOps" },
-  { quote: "The widget captured buying questions our sales team was missing. It paid for itself before we finished onboarding.", name: "Arjun Patel", role: "CEO, Northstar AI" },
-  { quote: "It feels elegant enough for customers and practical enough for operations. That combination is rare.", name: "Elena Moreau", role: "COO, Kairo" },
+  { quote: "Ragora made our help center feel alive in one afternoon. The quality bar feels like a product we would happily pay for.", name: "Henil Bhavsar", role: "Founder" },
+  { quote: "The widget captured buying questions our sales team was missing. It paid for itself before we finished onboarding.", name: "Yug Khatri", role: "CEO" },
+  { quote: "It feels elegant enough for customers and practical enough for operations. That combination is rare.", name: "Savan Patel", role: "COO" },
 ];
 
 const faqs = [
@@ -168,6 +176,13 @@ export default function HomePage() {
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="mx-auto mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.055] px-3 py-1 text-sm text-slate-300">
             <Sparkles size={15} className="text-violet-200" />
             AI knowledge assistants for modern teams
+          </motion.div>
+          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }} className="mx-auto mb-5 flex w-fit flex-wrap items-center justify-center gap-2 rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-xs font-semibold text-teal-100">
+            <span className="text-teal-100/70">Developed by</span>
+            <a href={developer.linkedin} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-white">
+              <Linkedin size={13} />
+              {developer.name}
+            </a>
           </motion.div>
           <motion.h1 initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} className="mx-auto max-w-5xl text-5xl font-semibold leading-[1.02] tracking-tight text-white sm:text-7xl lg:text-8xl">
             Launch a trusted AI knowledge layer with <span className="text-gradient">Ragora</span>.
@@ -281,6 +296,20 @@ export default function HomePage() {
           <div>
             <LogoMark />
             <p className="mt-4 max-w-sm text-sm leading-6 text-slate-500">Ragora is the AI knowledge OS for companies that want trusted answers, beautiful UX, and deployment speed.</p>
+            <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.035] p-4">
+              <p className="text-xs font-semibold uppercase text-slate-500">Developer</p>
+              <p className="mt-2 text-lg font-semibold text-white">{developer.name}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <a href={developer.linkedin} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.045] px-3 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08] hover:text-white">
+                  <Linkedin size={15} />
+                  LinkedIn
+                </a>
+                <a href={`mailto:${developer.email}`} className="inline-flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.045] px-3 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08] hover:text-white">
+                  <Mail size={15} />
+                  {developer.email}
+                </a>
+              </div>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-6 text-sm sm:grid-cols-4">
             {["Product", "Resources", "Docs", "Company"].map((group) => (
@@ -294,7 +323,7 @@ export default function HomePage() {
           </div>
         </div>
         <div className="mx-auto mt-10 flex max-w-7xl items-center justify-between border-t border-white/10 pt-6 text-sm text-slate-500">
-          <span>© 2026 Ragora Inc.</span>
+          <span>© 2026 Ragora. Developed by {developer.name}.</span>
           <div className="flex gap-3"><Globe2 size={16} /></div>
         </div>
       </footer>

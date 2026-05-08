@@ -97,6 +97,19 @@
       }
     }
 
+    function setLogo(target) {
+      target.textContent = "";
+      if (state.config.logo_url) {
+        var img = document.createElement("img");
+        img.alt = "";
+        img.referrerPolicy = "no-referrer";
+        img.src = state.config.logo_url;
+        target.appendChild(img);
+        return;
+      }
+      target.textContent = state.config.icon_label || "AI";
+    }
+
     function render() {
       var externalTrigger = Boolean(triggerSelector);
       var themeClass = resolveTheme(state.config.theme) === "light" ? "ragw-light" : "ragw-dark";
@@ -113,13 +126,13 @@
       root.querySelector(".ragw-title").textContent = state.config.title;
       var brandLogo = root.querySelector(".ragw-brand-logo");
       brandLogo.style.background = state.config.accent_color;
-      brandLogo.innerHTML = state.config.logo_url ? '<img alt="" src="' + state.config.logo_url + '" />' : state.config.icon_label;
+      setLogo(brandLogo);
       root.querySelector(".ragw-input").placeholder = state.config.input_placeholder;
       var launcher = root.querySelector(".ragw-launch");
       if (launcher) {
         launcher.style.background = state.config.accent_color;
         launcher.className = "ragw-launch " + state.config.launcher_style;
-        launcher.querySelector(".ragw-launch-icon").innerHTML = state.config.logo_url ? '<img alt="" src="' + state.config.logo_url + '" />' : state.config.icon_label;
+        setLogo(launcher.querySelector(".ragw-launch-icon"));
         launcher.querySelector("span:last-child").textContent = state.config.launcher_label;
         launcher.onclick = toggleChat;
       }

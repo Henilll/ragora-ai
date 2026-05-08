@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Bot, Copy, Loader2, MessageCircle, Palette, Sparkles, SlidersHorizontal, UploadCloud, Check } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Bot, Check, Copy, Loader2, MessageCircle, Palette, Sparkles, SlidersHorizontal, UploadCloud, X } from "lucide-react";
 import type { WidgetConfig } from "@/lib/api";
-import { getWidget, saveWidget } from "@/lib/api";
+import { getWidget, saveWidget, uploadWidgetLogo } from "@/lib/api";
 
 type Props = { userId: string };
 type WidgetForm = Omit<WidgetConfig, "widget_id" | "embed_script">;
@@ -37,6 +37,9 @@ const TEMPLATES = [
   { name: "Support Desk", role: "technical_support", goal: "Troubleshoot common product issues, ask clarifying questions, and escalate when the answer is not available.", welcome: "Hi. Tell me what is not working and I will help troubleshoot.", fallback: "I do not have a documented fix for that yet. Please share the error and contact details.", color: "#f59e0b" },
   { name: "Company FAQ", role: "internal_knowledge_base", goal: "Answer company, service, pricing, policy, and process FAQs.", welcome: "Hi. Ask me anything from this company's FAQ and documents.", fallback: "I do not know that from the available information yet.", color: "#10b981" },
 ];
+
+const LOGO_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+const MAX_LOGO_BYTES = 1_000_000;
 
 function Section({ icon: Icon, title, description, children }: { icon: typeof Bot; title: string; description?: string; children: React.ReactNode }) {
   return (
@@ -119,9 +122,11 @@ function WidgetPreview({ form }: { form: WidgetForm }) {
 }
 
 export function WidgetEmbed({ userId }: Props) {
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
   const [widget, setWidget] = useState<WidgetConfig | null>(null);
   const [form, setForm] = useState<WidgetForm>({ user_id: userId, ...DEFAULT_WIDGET });
   const [isSaving, setIsSaving] = useState(false);
+  const [isLogoUploading, setIsLogoUploading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -161,11 +166,27 @@ export function WidgetEmbed({ userId }: Props) {
     setForm({ ...form, title: t.name, launcher_label: t.name === "Sales Assistant" ? "Talk to Sales" : "Ask AI", bot_role: t.role, bot_goal: t.goal, welcome_message: t.welcome, fallback_message: t.fallback, accent_color: t.color, icon_label: t.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase() });
   }
 
-  function handleLogoFile(file: File) {
-    if (!file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = () => setForm((c) => ({ ...c, logo_url: String(reader.result) }));
-    reader.readAsDataURL(file);
+  async function handleLogoFile(file: File) {
+    setError(null);
+    if (!LOGO_TYPES.includes(file.type)) {
+      setError("Upload a PNG, JPG, WebP, or GIF logo.");
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      setError("Logo must be 1 MB or smaller.");
+      return;
+    }
+
+    setIsLogoUploading(true);
+    try {
+      const response = await uploadWidgetLogo(file);
+      setForm((c) => ({ ...c, logo_url: response.logo_url }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Logo upload failed.");
+    } finally {
+      setIsLogoUploading(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
   }
 
   return (
@@ -248,21 +269,58 @@ export function WidgetEmbed({ userId }: Props) {
         {/* Appearance */}
         <Section icon={Palette} title="Appearance" description="Brand, launcher, placement, and first impression.">
           {/* Logo */}
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <div
-              style={{ width: 48, height: 48, borderRadius: 8, background: form.accent_color || "var(--accent)", display: "grid", placeItems: "center", fontSize: "0.875rem", fontWeight: 700, color: "#fff", flexShrink: 0, cursor: "pointer", position: "relative", overflow: "hidden" }}
-              onClick={() => {
-                const inp = document.createElement("input");
-                inp.type = "file"; inp.accept = "image/*";
-                inp.onchange = (e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) handleLogoFile(f); };
-                inp.click();
+          <div className="rounded-lg border border-white/10 bg-slate-950/40 p-3">
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void handleLogoFile(file);
               }}
-            >
-              {form.logo_url ? <img src={form.logo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : form.icon_label}
+            />
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                className="group relative grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-lg border border-white/10 text-sm font-bold text-white"
+                style={{ background: form.accent_color || "var(--accent)" }}
+                onClick={() => logoInputRef.current?.click()}
+                aria-label="Upload widget logo"
+              >
+                {form.logo_url ? <img src={form.logo_url} alt="" className="h-full w-full object-cover" /> : form.icon_label}
+                <span className="absolute inset-0 hidden place-items-center bg-black/55 text-white group-hover:grid">
+                  {isLogoUploading ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
+                </span>
+              </button>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => logoInputRef.current?.click()}
+                    disabled={isLogoUploading}
+                    className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-3 text-xs font-semibold text-slate-950 transition hover:bg-violet-100 disabled:opacity-60"
+                  >
+                    {isLogoUploading ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
+                    {isLogoUploading ? "Uploading" : "Upload logo"}
+                  </button>
+                  {form.logo_url && (
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, logo_url: "" })}
+                      className="inline-flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.045] px-3 text-xs font-semibold text-slate-200 hover:bg-white/[0.08]"
+                    >
+                      <X size={13} />
+                      Remove
+                    </button>
+                  )}
+                </div>
+                <p className="mt-2 text-xs leading-5 text-slate-500">Stored in Supabase Storage. PNG, JPG, WebP, or GIF up to 1 MB.</p>
+              </div>
             </div>
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.375rem" }}>
-              <input className="inp" value={form.logo_url} onChange={(e) => setForm({ ...form, logo_url: e.target.value })} placeholder="Logo URL or click preview to upload" />
-              <input className="inp" value={form.icon_label} onChange={(e) => setForm({ ...form, icon_label: e.target.value.slice(0, 3).toUpperCase() })} placeholder="Icon letters (max 3)" />
+            <div className="mt-3 grid gap-2 md:grid-cols-[1fr_140px]">
+              <input className="inp" value={form.logo_url} onChange={(e) => setForm({ ...form, logo_url: e.target.value })} placeholder="Logo URL" />
+              <input className="inp" value={form.icon_label} onChange={(e) => setForm({ ...form, icon_label: e.target.value.slice(0, 3).toUpperCase() })} placeholder="Icon letters" />
             </div>
           </div>
           <input className="inp" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Widget title" />

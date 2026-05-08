@@ -5,46 +5,24 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
+  BarChart3,
   CheckCircle2,
+  Database,
   Loader2,
   LockKeyhole,
+  MessageCircle,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
-import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import {
+  completeSupabaseRedirect,
   forgotPassword,
   loginWithEmail,
   loginWithGoogle,
   resetPassword,
   signupWithEmail,
-  verifyEmail,
-  type AuthProvider,
 } from "@/lib/auth";
-
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (config: { client_id: string; callback: (response: { credential?: string }) => void }) => void;
-          renderButton: (
-            element: HTMLElement,
-            options: {
-              theme?: "outline" | "filled_blue" | "filled_black";
-              size?: "large" | "medium" | "small";
-              type?: "standard" | "icon";
-              shape?: "rectangular" | "pill" | "circle" | "square";
-              text?: "signin_with" | "signup_with" | "continue_with" | "signin";
-              width?: number;
-            },
-          ) => void;
-          prompt: () => void;
-        };
-      };
-    };
-  }
-}
 
 type Mode = "login" | "signup" | "forgot" | "reset" | "verify";
 
@@ -55,20 +33,20 @@ type AuthPanelProps = {
 const modeCopy: Record<Mode, { eyebrow: string; title: string; description: string; cta: string }> = {
   login: {
     eyebrow: "Welcome back",
-    title: "Sign in to Ragora",
-    description: "Continue to your AI knowledge workspace with secure JWT session handling.",
+    title: "Sign in to your workspace",
+    description: "Manage documents, answers, widgets, analytics, and provider keys from one secure console.",
     cta: "Sign in",
   },
   signup: {
-    eyebrow: "Start free",
-    title: "Create your Ragora workspace",
-    description: "Launch a trusted AI assistant for docs, teams, and customer-facing workflows.",
-    cta: "Create account",
+    eyebrow: "Start your workspace",
+    title: "Build a trusted AI support layer",
+    description: "Upload docs, tune your assistant, and deploy a branded website chatbot in minutes.",
+    cta: "Create workspace",
   },
   forgot: {
     eyebrow: "Account recovery",
     title: "Reset your password",
-    description: "Enter your email and we will send a secure reset link with a short-lived token.",
+    description: "Enter your email and Supabase Auth will send a secure reset link.",
     cta: "Send reset link",
   },
   reset: {
@@ -78,12 +56,24 @@ const modeCopy: Record<Mode, { eyebrow: string; title: string; description: stri
     cta: "Update password",
   },
   verify: {
-    eyebrow: "Verify email",
-    title: "Enter your verification code",
-    description: "We sent a six-digit OTP to your inbox. The code expires in 10 minutes.",
-    cta: "Verify workspace",
+    eyebrow: "Check inbox",
+    title: "Confirm your email",
+    description: "Supabase Auth sent a confirmation link. Open it to finish creating your workspace.",
+    cta: "Back to sign in",
   },
 };
+
+const proofPoints = [
+  { label: "Answer quality", value: "RAG", icon: Database },
+  { label: "Widget deploy", value: "1 script", icon: MessageCircle },
+  { label: "Ops control", value: "Admin", icon: ShieldCheck },
+];
+
+const trustItems = [
+  "Workspace-scoped document retrieval",
+  "JWT sessions with refresh rotation",
+  "Provider key failover and analytics",
+];
 
 function GoogleIcon() {
   return (
@@ -126,23 +116,13 @@ function PasswordStrength({ password }: { password: string }) {
   );
 }
 
-function AuthProviderButton({
-  provider,
-  children,
-  onSelect,
-  disabled = false,
-}: {
-  provider: AuthProvider;
-  children: ReactNode;
-  onSelect: (provider: AuthProvider) => void;
-  disabled?: boolean;
-}) {
+function AuthProviderButton({ children, onSelect, disabled = false }: { children: ReactNode; onSelect: () => void; disabled?: boolean }) {
   return (
     <button
       type="button"
-      onClick={() => onSelect(provider)}
+      onClick={onSelect}
       disabled={disabled}
-      className="flex h-11 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.045] text-sm font-semibold text-slate-100 transition hover:border-white/20 hover:bg-white/[0.075] disabled:cursor-not-allowed disabled:opacity-45"
+      className="flex h-12 w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.045] text-sm font-semibold text-slate-100 shadow-[0_16px_50px_rgba(0,0,0,0.18)] transition hover:border-white/20 hover:bg-white/[0.075] disabled:cursor-not-allowed disabled:opacity-45"
     >
       {children}
     </button>
@@ -151,73 +131,32 @@ function AuthProviderButton({
 
 export function AuthPanel({ mode }: AuthPanelProps) {
   const router = useRouter();
-  const googleButtonRef = useRef<HTMLDivElement | null>(null);
-  const [email, setEmail] = useState("founder@ragora.ai");
-  const [name, setName] = useState("Henil Bhavsar");
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
   const [password, setPassword] = useState("");
-  const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
   const copy = modeCopy[mode];
   const isAuthMode = mode === "login" || mode === "signup";
 
   useEffect(() => {
-    if (!isAuthMode || !googleClientId) return;
+    if (mode !== "reset") return;
+    const code = new URLSearchParams(window.location.search).get("code");
+    if (!code && !window.location.hash.includes("access_token=")) return;
+    void completeSupabaseRedirect(code).catch((error) => {
+      setMessage(error instanceof Error ? error.message : "Reset link could not be verified.");
+    });
+  }, [mode]);
 
-    const existing = document.querySelector<HTMLScriptElement>("script[src='https://accounts.google.com/gsi/client']");
-    const initialize = () => {
-      window.google?.accounts.id.initialize({
-        client_id: googleClientId,
-        callback: async (response) => {
-          if (!response.credential) {
-            setMessage("Google did not return an identity token.");
-            return;
-          }
-          setLoading(true);
-          setMessage(null);
-          try {
-            await loginWithGoogle(response.credential);
-            router.push("/dashboard");
-          } catch (error) {
-            setMessage(error instanceof Error ? error.message : "Google sign in failed.");
-          } finally {
-            setLoading(false);
-          }
-        },
-      });
-      if (googleButtonRef.current) {
-        googleButtonRef.current.innerHTML = "";
-        window.google?.accounts.id.renderButton(googleButtonRef.current, {
-          theme: "filled_black",
-          size: "large",
-          type: "standard",
-          shape: "rectangular",
-          text: mode === "signup" ? "signup_with" : "continue_with",
-          width: googleButtonRef.current.offsetWidth || 240,
-        });
-      }
-    };
-
-    if (existing) {
-      initialize();
-      return;
+  async function handleGoogle() {
+    setLoading(true);
+    setMessage(null);
+    try {
+      await loginWithGoogle();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Google sign in failed.");
+      setLoading(false);
     }
-
-    const script = document.createElement("script");
-    script.src = "https://accounts.google.com/gsi/client";
-    script.async = true;
-    script.defer = true;
-    script.onload = initialize;
-    document.head.appendChild(script);
-  }, [googleClientId, isAuthMode, mode, router]);
-
-  function handleProvider(provider: AuthProvider) {
-    if (!googleClientId || !window.google?.accounts.id) {
-      setMessage("Set NEXT_PUBLIC_GOOGLE_CLIENT_ID in frontend/.env.local and GOOGLE_CLIENT_ID in backend/.env to enable Google login.");
-      return;
-    }
-    window.google.accounts.id.prompt();
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -227,13 +166,17 @@ export function AuthPanel({ mode }: AuthPanelProps) {
 
     try {
       if (mode === "login") {
-        await loginWithEmail(email, password);
-        router.push("/dashboard");
+        const session = await loginWithEmail(email, password);
+        router.push(session.user.is_admin ? "/admin" : "/dashboard");
         return;
       }
       if (mode === "signup") {
-        await signupWithEmail(name, email, password);
-        router.push("/verify-email");
+        const result = await signupWithEmail(name, email, password);
+        if ("needsEmailConfirmation" in result) {
+          setMessage("Check your email and open the Supabase confirmation link to finish signup.");
+          return;
+        }
+        router.push("/dashboard");
         return;
       }
       if (mode === "forgot") {
@@ -247,15 +190,8 @@ export function AuthPanel({ mode }: AuthPanelProps) {
         window.setTimeout(() => router.push("/login"), 850);
         return;
       }
-      setLoading(false);
       if (mode === "verify") {
-        if (otp.replace(/\D/g, "").length < 6) {
-          setMessage("Enter the full six-digit verification code.");
-          return;
-        }
-        const response = await verifyEmail(otp);
-        setMessage(response.message);
-        window.setTimeout(() => router.push("/dashboard"), 600);
+        router.push("/login");
         return;
       }
     } catch (error) {
@@ -266,128 +202,176 @@ export function AuthPanel({ mode }: AuthPanelProps) {
   }
 
   return (
-    <main className="premium-shell relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
-      <div aria-hidden className="mesh-line absolute inset-0 opacity-60" />
-      <div aria-hidden className="absolute left-1/2 top-16 h-72 w-72 -translate-x-1/2 rounded-full bg-violet-500/20 blur-3xl" />
+    <main className="premium-shell relative flex min-h-screen items-center justify-center overflow-x-hidden px-4 py-6 sm:px-6">
+      <div aria-hidden className="mesh-line absolute inset-0 opacity-40" />
+      <div aria-hidden className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
 
-      <Link href="/" className="absolute left-5 top-5 z-10 flex items-center gap-2 text-sm font-semibold text-slate-200">
-        <span className="grid h-8 w-8 place-items-center rounded-lg bg-white text-slate-950">
-          <Sparkles size={16} />
-        </span>
-        Ragora
-      </Link>
+      <div className="absolute left-5 top-5 z-20">
+        <Link href="/" className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+          <span className="grid h-9 w-9 place-items-center rounded-lg bg-white text-slate-950 shadow-[0_20px_60px_rgba(255,255,255,0.12)]">
+            <Sparkles size={16} />
+          </span>
+          Ragora
+        </Link>
+      </div>
 
       <motion.section
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.55, ease: "easeOut" }}
-        className="glass relative z-10 grid w-full max-w-5xl overflow-hidden rounded-xl lg:grid-cols-[0.92fr_1fr]"
+        transition={{ duration: 0.45, ease: "easeOut" }}
+        className="relative z-10 grid w-full max-w-6xl overflow-hidden rounded-xl border border-white/10 bg-slate-950/72 shadow-[0_32px_120px_rgba(0,0,0,0.5)] backdrop-blur-2xl lg:min-h-[640px] lg:grid-cols-[1.02fr_0.98fr]"
       >
-        <aside className="hidden border-r border-white/10 bg-white/[0.035] p-8 lg:block">
-          <div className="mb-20 inline-flex items-center gap-2 rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-xs font-semibold text-teal-100">
-            <ShieldCheck size={14} />
-            SOC 2-ready auth architecture
-          </div>
-          <h2 className="max-w-sm text-3xl font-semibold leading-tight tracking-tight text-white">
-            Knowledge assistants your buyers can trust before the first demo.
-          </h2>
-          <div className="mt-8 space-y-3">
-            {["JWT access tokens with refresh rotation", "Email OTP verification and reset tokens", "Google OAuth with backend token verification"].map((item) => (
-              <div key={item} className="flex items-center gap-3 text-sm text-slate-300">
-                <CheckCircle2 className="h-4 w-4 text-teal-300" />
-                {item}
-              </div>
-            ))}
-          </div>
-          <div className="float-slow mt-12 rounded-lg border border-white/10 bg-slate-950/70 p-4">
-            <div className="mb-3 flex items-center gap-2 text-xs font-medium text-slate-400">
-              <LockKeyhole size={14} />
-              Session preview
+        <aside className="relative hidden border-r border-white/10 bg-[radial-gradient(circle_at_25%_15%,rgba(45,212,191,0.12),transparent_18rem),linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.02))] p-7 lg:flex lg:flex-col">
+          <div className="flex items-center justify-between">
+            <div className="inline-flex items-center gap-2 rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-xs font-semibold text-teal-100">
+              <ShieldCheck size={14} />
+              Production-ready RAG SaaS
             </div>
-            <div className="space-y-2 font-mono text-xs text-slate-300">
-              <p>access: rg_access_••••••••</p>
-              <p>refresh: rotated every login</p>
-              <p>claims: workspace, role, plan</p>
+            <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-slate-400">v1 console</div>
+          </div>
+
+          <div className="mt-11">
+            <p className="mb-3 text-xs font-semibold uppercase text-violet-200">Ragora operating system</p>
+            <h2 className="max-w-lg text-3xl font-semibold leading-tight tracking-tight text-white xl:text-4xl">
+              Turn your documents into a governed customer-facing AI assistant.
+            </h2>
+            <p className="mt-4 max-w-md text-sm leading-6 text-slate-400">
+              One console for source coverage, answer testing, widget design, provider failover, and visitor analytics.
+            </p>
+          </div>
+
+          <div className="mt-7 grid grid-cols-3 gap-3">
+            {proofPoints.map((point) => {
+              const Icon = point.icon;
+              return (
+                <div key={point.label} className="rounded-lg border border-white/10 bg-black/20 p-3">
+                  <Icon className="mb-3 h-4 w-4 text-violet-200" />
+                  <p className="text-lg font-semibold text-white">{point.value}</p>
+                  <p className="mt-1 text-[11px] text-slate-500">{point.label}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-auto">
+            <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.24)]">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="grid h-8 w-8 place-items-center rounded-lg bg-white text-slate-950">
+                    <BarChart3 size={15} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">Live readiness</p>
+                    <p className="text-xs text-slate-500">Docs, widget, keys, auth</p>
+                  </div>
+                </div>
+                <span className="rounded-full border border-teal-300/20 bg-teal-300/10 px-2 py-1 text-[11px] font-semibold text-teal-100">Healthy</span>
+              </div>
+              <div className="space-y-2">
+                {trustItems.map((item) => (
+                  <div key={item} className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.035] px-3 py-2 text-sm text-slate-300">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-teal-300" />
+                    {item}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </aside>
 
-        <div className="p-5 sm:p-8">
-          <div className="mb-7">
-            <p className="mb-2 text-xs font-semibold uppercase text-violet-200">{copy.eyebrow}</p>
-            <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">{copy.title}</h1>
-            <p className="mt-2 max-w-md text-sm leading-6 text-slate-400">{copy.description}</p>
-          </div>
-
-          {isAuthMode && (
-            <>
-              <div className="grid gap-3">
-                <div className="min-h-11 overflow-hidden rounded-lg border border-white/10 bg-white/[0.045]">
-                  {googleClientId ? (
-                    <div ref={googleButtonRef} className="flex min-h-11 w-full items-center justify-center" />
-                  ) : (
-                    <AuthProviderButton provider="google" onSelect={handleProvider}>
-                      <GoogleIcon />
-                      Continue with Google
-                    </AuthProviderButton>
-                  )}
-                </div>
+        <div className="flex items-center justify-center p-5 sm:p-8">
+          <div className="w-full max-w-md">
+            <div className="mb-7">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-3 py-1 text-xs font-semibold text-slate-300">
+                <LockKeyhole size={13} className="text-violet-200" />
+                {copy.eyebrow}
               </div>
-              <div className="my-6 flex items-center gap-3 text-xs uppercase text-slate-500">
-                <span className="h-px flex-1 bg-white/10" />
-                or
-                <span className="h-px flex-1 bg-white/10" />
-              </div>
-            </>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {mode === "signup" && (
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-slate-300">Full name</span>
-                <input className="auth-input" value={name} onChange={(event) => setName(event.target.value)} placeholder="Ada Lovelace" />
-              </label>
-            )}
-
-            {mode !== "reset" && mode !== "verify" && (
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-slate-300">Email</span>
-                <input className="auth-input" value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="you@company.com" required />
-              </label>
-            )}
-
-            {(mode === "login" || mode === "signup" || mode === "reset") && (
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-slate-300">Password</span>
-                <input className="auth-input" value={password} onChange={(event) => setPassword(event.target.value)} type="password" placeholder="••••••••••••" required />
-                {(mode === "signup" || mode === "reset") && <PasswordStrength password={password} />}
-              </label>
-            )}
-
-            {mode === "verify" && (
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-slate-300">Verification code</span>
-                <input className="auth-input text-center font-mono text-lg tracking-[0.45em]" value={otp} onChange={(event) => setOtp(event.target.value.slice(0, 6))} placeholder="123456" inputMode="numeric" />
-              </label>
-            )}
-
-            <button type="submit" className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-white font-semibold text-slate-950 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60" disabled={loading}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : copy.cta}
-              {!loading && <ArrowRight size={16} />}
-            </button>
-          </form>
-
-          {message && (
-            <div className="mt-4 rounded-lg border border-teal-300/20 bg-teal-300/10 px-4 py-3 text-sm text-teal-100">
-              {message}
+              <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">{copy.title}</h1>
+              <p className="mt-3 text-sm leading-6 text-slate-400">{copy.description}</p>
             </div>
-          )}
 
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-400">
-            {mode === "login" && <Link className="hover:text-white" href="/forgot-password">Forgot password?</Link>}
-            {mode === "login" && <Link className="hover:text-white" href="/signup">Create an account</Link>}
-            {mode === "signup" && <Link className="hover:text-white" href="/login">Already have an account?</Link>}
-            {(mode === "forgot" || mode === "reset" || mode === "verify") && <Link className="hover:text-white" href="/login">Back to login</Link>}
+            {isAuthMode && (
+              <>
+                <AuthProviderButton onSelect={handleGoogle} disabled={loading}>
+                  <GoogleIcon />
+                  Continue with Google
+                </AuthProviderButton>
+                <div className="my-6 flex items-center gap-3 text-xs uppercase text-slate-500">
+                  <span className="h-px flex-1 bg-white/10" />
+                  or continue with email
+                  <span className="h-px flex-1 bg-white/10" />
+                </div>
+              </>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {mode === "signup" && (
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-300">Full name</span>
+                  <input className="auth-input h-12" value={name} onChange={(event) => setName(event.target.value)} placeholder="Ada Lovelace" autoComplete="name" />
+                </label>
+              )}
+
+              {mode !== "reset" && mode !== "verify" && (
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-300">Work email</span>
+                  <input className="auth-input h-12" value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="you@company.com" autoComplete="email" required />
+                </label>
+              )}
+
+              {(mode === "login" || mode === "signup" || mode === "reset") && (
+                <label className="block">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <span className="block text-sm font-medium text-slate-300">Password</span>
+                    {mode === "login" && <Link className="text-xs font-semibold text-violet-200 hover:text-white" href="/forgot-password">Forgot?</Link>}
+                  </div>
+                  <input className="auth-input h-12" value={password} onChange={(event) => setPassword(event.target.value)} type="password" placeholder="Enter your password" autoComplete={mode === "signup" ? "new-password" : "current-password"} required />
+                  {(mode === "signup" || mode === "reset") && <PasswordStrength password={password} />}
+                </label>
+              )}
+
+              {mode === "verify" && (
+                <div className="rounded-lg border border-white/10 bg-white/[0.04] px-4 py-4 text-sm leading-6 text-slate-300">
+                  Open the confirmation link from Supabase Auth. After confirmation, sign in with your email/password or Google.
+                </div>
+              )}
+
+              <button type="submit" className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-white font-semibold text-slate-950 shadow-[0_18px_60px_rgba(255,255,255,0.12)] transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60" disabled={loading}>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : copy.cta}
+                {!loading && <ArrowRight size={16} />}
+              </button>
+            </form>
+
+            {message && (
+              <div className="mt-4 rounded-lg border border-teal-300/20 bg-teal-300/10 px-4 py-3 text-sm text-teal-100">
+                {message}
+              </div>
+            )}
+
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-sm text-slate-400">
+              {mode === "login" && (
+                <>
+                  <span>New to Ragora?</span>
+                  <Link className="font-semibold text-violet-200 hover:text-white" href="/signup">Create workspace</Link>
+                </>
+              )}
+              {mode === "signup" && (
+                <>
+                  <span>Already have an account?</span>
+                  <Link className="font-semibold text-violet-200 hover:text-white" href="/login">Sign in</Link>
+                </>
+              )}
+              {(mode === "forgot" || mode === "reset" || mode === "verify") && <Link className="font-semibold text-violet-200 hover:text-white" href="/login">Back to login</Link>}
+            </div>
+
+            <div className="mt-8 grid gap-2 text-xs text-slate-500 sm:grid-cols-3">
+              {["No credit card", "Secure sessions", "Admin controls"].map((item) => (
+                <div key={item} className="flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                <CheckCircle2 className="h-4 w-4 text-teal-300" />
+                {item}
+              </div>
+            ))}
+            </div>
           </div>
         </div>
       </motion.section>

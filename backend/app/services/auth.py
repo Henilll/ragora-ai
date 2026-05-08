@@ -122,3 +122,36 @@ async def verify_google_id_token(id_token: str, settings: Settings) -> dict[str,
         "google_sub": data.get("sub") or "",
     }
 
+
+async def verify_supabase_access_token(access_token: str, settings: Settings) -> dict[str, Any]:
+    async with httpx.AsyncClient(timeout=10) as client:
+        response = await client.get(
+            f"{settings.supabase_url.rstrip('/')}/auth/v1/user",
+            headers={
+                "apikey": settings.supabase_service_role_key,
+                "Authorization": f"Bearer {access_token}",
+            },
+        )
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=401, detail="Supabase session verification failed.")
+
+    data = response.json()
+    email = (data.get("email") or "").lower()
+    if not email:
+        raise HTTPException(status_code=401, detail="Supabase account did not include an email.")
+
+    metadata = data.get("user_metadata") or {}
+    app_metadata = data.get("app_metadata") or {}
+    provider = app_metadata.get("provider") or "email"
+    if provider not in {"email", "google"}:
+        provider = "email"
+
+    return {
+        "email": email,
+        "name": metadata.get("full_name") or metadata.get("name") or email.split("@", 1)[0],
+        "avatar_url": metadata.get("avatar_url") or metadata.get("picture") or "",
+        "email_verified": bool(data.get("email_confirmed_at")) or provider == "google",
+        "provider": provider,
+        "google_sub": data.get("id") if provider == "google" else "",
+    }

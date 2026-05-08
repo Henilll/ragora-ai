@@ -35,12 +35,8 @@ class EmbeddingService:
         failed_key_ids: set[str] = set()
         last_error: ExternalServiceError | None = None
 
-        for _ in range(4):
+        for _ in range(8):
             key_row = await self._db.choose_api_key("mistral", self._settings.key_rotation_cache_seconds, failed_key_ids) if self._db else None
-            if not key_row and failed_key_ids:
-                if last_error:
-                    raise last_error
-                raise ExternalServiceError("Mistral", None, "No enabled Mistral API key is available.")
             api_key = (key_row or {}).get("key_value") or self._settings.mistral_api_key
             response = await self._client.post(
                 "/embeddings",

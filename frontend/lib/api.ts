@@ -159,6 +159,24 @@ export function saveWidget(config: Omit<WidgetConfig, "widget_id" | "embed_scrip
   });
 }
 
+export async function uploadWidgetLogo(file: File) {
+  const token = getAccessToken();
+  const body = new FormData();
+  body.append("file", file);
+
+  const response = await fetch(`${API_BASE_URL}/widgets/logo`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body,
+  });
+
+  if (!response.ok) {
+    throw new Error(await errorMessage(response));
+  }
+
+  return response.json() as Promise<{ logo_url: string }>;
+}
+
 export function getAnalytics(userId: string) {
   return jsonRequest<WidgetAnalytics>(`/analytics?user_id=${encodeURIComponent(userId)}`);
 }
