@@ -9,7 +9,6 @@ import {
   ChevronDown,
   DatabaseZap,
   FileSearch,
-  Github,
   Globe2,
   LockKeyhole,
   MessageSquareText,
@@ -296,7 +295,7 @@ export default function HomePage() {
         </div>
         <div className="mx-auto mt-10 flex max-w-7xl items-center justify-between border-t border-white/10 pt-6 text-sm text-slate-500">
           <span>© 2026 Ragora Inc.</span>
-          <div className="flex gap-3"><Github size={16} /><Globe2 size={16} /></div>
+          <div className="flex gap-3"><Globe2 size={16} /></div>
         </div>
       </footer>
     </main>

@@ -1,6 +1,7 @@
 from uuid import uuid4
 import secrets
 from datetime import datetime
+import random
 
 import httpx
 
@@ -24,6 +25,7 @@ class DatabaseService:
             },
             timeout=60,
         )
+        self._api_key_cache: dict[str, tuple[float, list[dict]]] = {}
 
     async def close(self) -> None:
         await self._client.aclose()
@@ -72,6 +74,7 @@ class DatabaseService:
         avatar_url: str = "",
         email_verified: bool = False,
         google_sub: str = "",
+        is_admin: bool = False,
     ) -> dict:
         response = await self._request(
             "POST",
@@ -85,6 +88,7 @@ class DatabaseService:
                 "avatar_url": avatar_url,
                 "email_verified": email_verified,
                 "google_sub": google_sub,
+                "is_admin": is_admin,
             },
         )
         return response.json()[0]
@@ -92,6 +96,36 @@ class DatabaseService:
     async def update_user(self, user_id: str, payload: dict) -> dict:
         response = await self._request("PATCH", "users", params={"id": f"eq.{user_id}"}, json=payload)
         return response.json()[0]
+
+    async def ensure_admin_user(self, email: str, name: str, workspace: str, password_hash: str) -> dict:
+        existing = await self.get_user_by_email(email)
+        payload = {
+            "name": name,
+            "provider": "email",
+            "password_hash": password_hash,
+            "email_verified": True,
+            "is_admin": True,
+        }
+        if existing:
+            return await self.update_user(existing["id"], payload)
+
+        return await self.create_user(
+            email=email,
+            name=name,
+            workspace=workspace,
+            provider="email",
+            password_hash=password_hash,
+            email_verified=True,
+            is_admin=True,
+        )
+
+    async def list_users(self, limit: int = 100) -> list[dict]:
+        response = await self._request(
+            "GET",
+            "users",
+            params={"select": "id,email,name,workspace,provider,email_verified,is_admin,created_at", "order": "created_at.desc", "limit": str(limit)},
+        )
+        return response.json()
 
     async def create_refresh_session(
         self,
@@ -126,6 +160,41 @@ class DatabaseService:
             "refresh_sessions",
             params={"token_hash": f"eq.{token_hash}", "revoked_at": "is.null"},
             json={"revoked_at": datetime.utcnow().isoformat()},
+        )
+
+    async def create_email_verification(self, user_id: str, code_hash: str, expires_at: datetime) -> None:
+        await self._request(
+            "POST",
+            "email_verifications",
+            json={
+                "user_id": user_id,
+                "code_hash": code_hash,
+                "expires_at": expires_at.isoformat(),
+            },
+        )
+
+    async def get_active_email_verification(self, user_id: str) -> dict | None:
+        response = await self._request(
+            "GET",
+            "email_verifications",
+            params={
+                "select": "*",
+                "user_id": f"eq.{user_id}",
+                "used_at": "is.null",
+                "expires_at": f"gt.{datetime.utcnow().isoformat()}",
+                "order": "created_at.desc",
+                "limit": "1",
+            },
+        )
+        rows = response.json()
+        return rows[0] if rows else None
+
+    async def mark_email_verification_used(self, verification_id: str) -> None:
+        await self._request(
+            "PATCH",
+            "email_verifications",
+            params={"id": f"eq.{verification_id}"},
+            json={"used_at": datetime.utcnow().isoformat()},
         )
 
     async def update_document_chunk_count(self, document_id: str, chunk_count: int, status: str = "ready") -> None:
@@ -318,6 +387,114 @@ class DatabaseService:
             params={"user_id": f"eq.{user_id}", "id": f"eq.{document_id}"},
         )
 
+    async def list_api_keys(self, service: str | None = None, include_values: bool = False) -> list[dict]:
+        params = {
+            "select": "*",
+            "order": "created_at.desc",
+        }
+        if service:
+            params["service"] = f"eq.{service}"
+        response = await self._request("GET", "api_keys", params=params)
+        rows = response.json()
+        if not include_values:
+            for row in rows:
+                row["key_value"] = _mask_key(row.get("key_value", ""))
+        return rows
+
+    async def create_api_key(self, payload: dict) -> dict:
+        response = await self._request("POST", "api_keys", json=payload)
+        self._api_key_cache.pop(payload["service"], None)
+        row = response.json()[0]
+        row["key_value"] = _mask_key(row.get("key_value", ""))
+        return row
+
+    async def update_api_key(self, key_id: str, payload: dict) -> dict:
+        existing = await self._request("GET", "api_keys", params={"select": "service", "id": f"eq.{key_id}", "limit": "1"})
+        service = existing.json()[0]["service"] if existing.json() else None
+        response = await self._request("PATCH", "api_keys", params={"id": f"eq.{key_id}"}, json=payload)
+        if service:
+            self._api_key_cache.pop(service, None)
+        rows = response.json()
+        if not rows:
+            return {}
+        row = rows[0]
+        row["key_value"] = _mask_key(row.get("key_value", ""))
+        return row
+
+    async def delete_api_key(self, key_id: str) -> None:
+        existing = await self._request("GET", "api_keys", params={"select": "service", "id": f"eq.{key_id}", "limit": "1"})
+        service = existing.json()[0]["service"] if existing.json() else None
+        await self._request("DELETE", "api_keys", params={"id": f"eq.{key_id}"})
+        if service:
+            self._api_key_cache.pop(service, None)
+
+    async def choose_api_key(self, service: str, cache_seconds: int = 30, exclude_ids: set[str] | None = None) -> dict | None:
+        now = datetime.utcnow().timestamp()
+        cached_at, cached = self._api_key_cache.get(service, (0, []))
+        if not cached or now - cached_at > cache_seconds:
+            response = await self._request(
+                "GET",
+                "api_keys",
+                params={
+                    "select": "*",
+                    "service": f"eq.{service}",
+                    "is_enabled": "eq.true",
+                    "order": "failure_count.asc,usage_count.asc",
+                },
+            )
+            cached = response.json()
+            self._api_key_cache[service] = (now, cached)
+
+        if not cached:
+            return None
+
+        excluded = exclude_ids or set()
+        weighted: list[dict] = []
+        for row in cached:
+            if row["id"] in excluded:
+                continue
+            weighted.extend([row] * max(1, int(row.get("weight") or 1)))
+        if not weighted:
+            return None
+        return random.choice(weighted)
+
+    async def record_api_key_success(self, key_id: str) -> None:
+        await self._request(
+            "POST",
+            "rpc/increment_api_key_success",
+            json={"key_id": key_id},
+        )
+
+    async def record_api_key_failure(self, key_id: str, error: str) -> None:
+        await self._request(
+            "POST",
+            "rpc/increment_api_key_failure",
+            json={"key_id": key_id, "error_message": error[:500]},
+        )
+
+    async def admin_overview(self) -> dict:
+        users = await self.list_users(limit=500)
+        docs = (await self._request("GET", "documents", params={"select": "id,status,chunk_count"})).json()
+        keys = await self.list_api_keys(include_values=False)
+        widgets = (await self._request("GET", "chat_widgets", params={"select": "id,is_enabled"})).json()
+        chats = (await self._request("GET", "chats", params={"select": "id"})).json()
+        widget_chats = (await self._request("GET", "widget_chats", params={"select": "id"})).json()
+        return {
+            "users": len(users),
+            "admins": len([user for user in users if user.get("is_admin")]),
+            "documents": len(docs),
+            "ready_documents": len([doc for doc in docs if doc.get("status", "ready") == "ready"]),
+            "processing_documents": len([doc for doc in docs if doc.get("status") == "processing"]),
+            "failed_documents": len([doc for doc in docs if doc.get("status") == "failed"]),
+            "chunks": sum(doc.get("chunk_count") or 0 for doc in docs),
+            "chats": len(chats),
+            "widgets": len(widgets),
+            "live_widgets": len([widget for widget in widgets if widget.get("is_enabled")]),
+            "widget_messages": len(widget_chats),
+            "api_keys": len(keys),
+            "enabled_api_keys": len([key for key in keys if key.get("is_enabled")]),
+        }
+
     async def _request(self, method: str, path: str, **kwargs) -> httpx.Response:
         response = await self._client.request(method, path, **kwargs)
         try:
@@ -329,3 +506,11 @@ class DatabaseService:
                 detail=exc.response.text,
             ) from exc
         return response
+
+
+def _mask_key(value: str) -> str:
+    if not value:
+        return ""
+    if len(value) <= 10:
+        return "••••"
+    return f"{value[:6]}••••••••{value[-4:]}"

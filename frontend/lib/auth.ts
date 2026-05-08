@@ -1,4 +1,4 @@
-export type AuthProvider = "email" | "google" | "github";
+export type AuthProvider = "email" | "google";
 
 export type AuthUser = {
   id: string;
@@ -8,6 +8,7 @@ export type AuthUser = {
   provider: AuthProvider;
   avatar_url?: string;
   email_verified: boolean;
+  is_admin?: boolean;
 };
 
 export type AuthSession = {

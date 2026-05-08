@@ -12,6 +12,52 @@ class AuthUser(BaseModel):
     provider: str
     avatar_url: str = ""
     email_verified: bool
+    is_admin: bool = False
+
+
+class AdminApiKeyCreate(BaseModel):
+    service: Literal["groq", "mistral"]
+    name: str = Field(min_length=2)
+    key_value: str = Field(min_length=10)
+    weight: int = Field(default=1, ge=1, le=100)
+    is_enabled: bool = True
+
+
+class AdminApiKeyUpdate(BaseModel):
+    name: str | None = None
+    key_value: str | None = None
+    weight: int | None = Field(default=None, ge=1, le=100)
+    is_enabled: bool | None = None
+
+
+class AdminApiKey(BaseModel):
+    id: str
+    service: Literal["groq", "mistral"]
+    name: str
+    key_value: str
+    is_enabled: bool
+    weight: int
+    usage_count: int
+    failure_count: int
+    last_used_at: datetime | None = None
+    last_error: str = ""
+    created_at: datetime
+
+
+class AdminOverview(BaseModel):
+    users: int
+    admins: int
+    documents: int
+    ready_documents: int
+    processing_documents: int
+    failed_documents: int
+    chunks: int
+    chats: int
+    widgets: int
+    live_widgets: int
+    widget_messages: int
+    api_keys: int
+    enabled_api_keys: int
 
 
 class AuthResponse(BaseModel):

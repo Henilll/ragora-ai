@@ -5,11 +5,27 @@ create table if not exists public.users (
   email text not null unique,
   name text not null,
   workspace text not null unique,
-  provider text not null default 'email' check (provider in ('email', 'google', 'github')),
+  provider text not null default 'email' check (provider in ('email', 'google')),
   password_hash text,
   avatar_url text not null default '',
   email_verified boolean not null default false,
+  is_admin boolean not null default false,
   google_sub text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.api_keys (
+  id uuid primary key default gen_random_uuid(),
+  service text not null check (service in ('groq', 'mistral')),
+  name text not null,
+  key_value text not null,
+  is_enabled boolean not null default true,
+  weight integer not null default 1 check (weight >= 1 and weight <= 100),
+  usage_count integer not null default 0,
+  failure_count integer not null default 0,
+  last_used_at timestamptz,
+  last_error text not null default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -22,6 +38,15 @@ create table if not exists public.refresh_sessions (
   created_at timestamptz not null default now(),
   expires_at timestamptz not null,
   revoked_at timestamptz
+);
+
+create table if not exists public.email_verifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  code_hash text not null,
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  created_at timestamptz not null default now()
 );
 
 create table if not exists public.documents (
@@ -107,6 +132,13 @@ create index if not exists users_workspace_idx
 create index if not exists refresh_sessions_token_hash_idx
   on public.refresh_sessions (token_hash);
 
+create index if not exists email_verifications_user_active_idx
+  on public.email_verifications (user_id, expires_at desc)
+  where used_at is null;
+
+create index if not exists api_keys_service_enabled_idx
+  on public.api_keys (service, is_enabled, weight);
+
 create index if not exists document_chunks_user_document_idx
   on public.document_chunks (user_id, document_id);
 
@@ -150,9 +182,35 @@ as $$
   limit least(match_count, 20);
 $$;
 
+create or replace function public.increment_api_key_success(key_id uuid)
+returns void
+language sql
+as $$
+  update public.api_keys
+  set usage_count = usage_count + 1,
+      last_used_at = now(),
+      last_error = '',
+      updated_at = now()
+  where id = key_id;
+$$;
+
+create or replace function public.increment_api_key_failure(key_id uuid, error_message text)
+returns void
+language sql
+as $$
+  update public.api_keys
+  set failure_count = failure_count + 1,
+      last_used_at = now(),
+      last_error = coalesce(error_message, ''),
+      updated_at = now()
+  where id = key_id;
+$$;
+
 alter table public.documents enable row level security;
 alter table public.users enable row level security;
 alter table public.refresh_sessions enable row level security;
+alter table public.email_verifications enable row level security;
+alter table public.api_keys enable row level security;
 alter table public.document_chunks enable row level security;
 alter table public.chats enable row level security;
 alter table public.chat_widgets enable row level security;

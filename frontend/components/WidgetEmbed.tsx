@@ -38,14 +38,19 @@ const TEMPLATES = [
   { name: "Company FAQ", role: "internal_knowledge_base", goal: "Answer company, service, pricing, policy, and process FAQs.", welcome: "Hi. Ask me anything from this company's FAQ and documents.", fallback: "I do not know that from the available information yet.", color: "#10b981" },
 ];
 
-function Section({ icon: Icon, title, children }: { icon: typeof Bot; title: string; children: React.ReactNode }) {
+function Section({ icon: Icon, title, description, children }: { icon: typeof Bot; title: string; description?: string; children: React.ReactNode }) {
   return (
-    <div className="card-sm" style={{ padding: "1.125rem" }}>
+    <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.875rem" }}>
-        <Icon size={14} style={{ color: "var(--accent-light)" }} />
-        <p style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-primary)" }}>{title}</p>
+        <div className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-white/[0.06]">
+          <Icon size={14} style={{ color: "var(--accent-light)" }} />
+        </div>
+        <div>
+          <p style={{ fontSize: "0.875rem", fontWeight: 700, color: "var(--text-primary)" }}>{title}</p>
+          {description && <p className="mt-0.5 text-xs text-slate-500">{description}</p>}
+        </div>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>{children}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>{children}</div>
     </div>
   );
 }
@@ -63,7 +68,7 @@ function WidgetPreview({ form }: { form: WidgetForm }) {
           {form.is_enabled ? "Live" : "Paused"}
         </span>
       </div>
-      <div className="relative min-h-[430px] overflow-hidden rounded-xl border border-white/10 bg-[radial-gradient(circle_at_30%_15%,rgba(139,92,246,0.24),transparent_16rem),linear-gradient(180deg,rgba(15,23,42,0.86),rgba(2,6,23,0.96))] p-4">
+      <div className="relative min-h-[470px] overflow-hidden rounded-xl border border-white/10 bg-[radial-gradient(circle_at_30%_15%,rgba(45,212,191,0.14),transparent_14rem),radial-gradient(circle_at_85%_0%,rgba(99,102,241,0.18),transparent_16rem),linear-gradient(180deg,rgba(15,23,42,0.86),rgba(2,6,23,0.96))] p-4">
         <div className="absolute left-5 top-5 h-2 w-28 rounded-full bg-white/10" />
         <div className="absolute left-5 top-10 h-2 w-40 rounded-full bg-white/5" />
         <div className="absolute bottom-5 right-5">
@@ -166,14 +171,14 @@ export function WidgetEmbed({ userId }: Props) {
   return (
     <section className="glass rounded-xl p-4 sm:p-6">
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
+      <div className="mb-5 flex flex-col gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
           <div style={{ width: 32, height: 32, borderRadius: 8, background: "var(--accent-dim)", border: "1px solid rgba(99,102,241,0.2)", display: "grid", placeItems: "center" }}>
             <MessageCircle size={15} style={{ color: "var(--accent-light)" }} />
           </div>
           <div>
-            <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--text-primary)" }}>Chatbot Builder</p>
-            <p style={{ fontSize: "0.75rem", color: "var(--text-tertiary)" }}>Configure and embed your AI widget</p>
+            <p className="text-lg font-semibold tracking-tight text-white">Chatbot Builder</p>
+            <p style={{ fontSize: "0.75rem", color: "var(--text-tertiary)" }}>Configure appearance, behavior, launch state, and embed code.</p>
           </div>
         </div>
         <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
@@ -212,39 +217,26 @@ export function WidgetEmbed({ userId }: Props) {
       <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_380px]">
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
         {/* Templates */}
-        <div className="card-sm" style={{ padding: "1.125rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.875rem" }}>
-            <Sparkles size={14} style={{ color: "var(--accent-light)" }} />
-            <p style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-primary)" }}>Quick-start Templates</p>
+        <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <div className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-white/[0.06]">
+                <Sparkles size={14} style={{ color: "var(--accent-light)" }} />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-white">Quick-start Templates</p>
+                <p className="text-xs text-slate-500">Pick a role and tune details below.</p>
+              </div>
+            </div>
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
             {TEMPLATES.map((t) => (
               <button
                 key={t.name}
                 type="button"
                 onClick={() => applyTemplate(t)}
-                style={{
-                  padding: "0.375rem 0.75rem",
-                  borderRadius: 6,
-                  border: `1px solid ${t.color}30`,
-                  background: `${t.color}10`,
-                  color: t.color,
-                  fontSize: "0.75rem",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  transition: "background 0.15s, border-color 0.15s",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.375rem",
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = `${t.color}20`;
-                  (e.currentTarget as HTMLButtonElement).style.borderColor = `${t.color}50`;
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = `${t.color}10`;
-                  (e.currentTarget as HTMLButtonElement).style.borderColor = `${t.color}30`;
-                }}
+                className="flex min-h-16 items-center gap-2 rounded-lg border px-3 py-3 text-left text-xs font-semibold transition hover:bg-white/[0.07]"
+                style={{ borderColor: `${t.color}30`, background: `${t.color}10`, color: t.color }}
               >
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: t.color, flexShrink: 0 }} />
                 {t.name}
@@ -254,7 +246,7 @@ export function WidgetEmbed({ userId }: Props) {
         </div>
 
         {/* Appearance */}
-        <Section icon={Palette} title="Appearance">
+        <Section icon={Palette} title="Appearance" description="Brand, launcher, placement, and first impression.">
           {/* Logo */}
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <div
@@ -277,7 +269,7 @@ export function WidgetEmbed({ userId }: Props) {
           <input className="inp" value={form.launcher_label} onChange={(e) => setForm({ ...form, launcher_label: e.target.value })} placeholder="Launcher button label" />
           <input className="inp" value={form.input_placeholder} onChange={(e) => setForm({ ...form, input_placeholder: e.target.value })} placeholder="Input placeholder text" />
           <textarea className="inp" value={form.welcome_message} onChange={(e) => setForm({ ...form, welcome_message: e.target.value })} rows={2} placeholder="Welcome message" style={{ resize: "none" }} />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto auto", gap: "0.5rem" }}>
+          <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto_auto]">
             <select className="inp" value={form.theme} onChange={(e) => setForm({ ...form, theme: e.target.value as "dark" | "light" })}>
               <option value="dark">Dark</option>
               <option value="light">Light</option>
@@ -293,7 +285,7 @@ export function WidgetEmbed({ userId }: Props) {
               <input type="color" value={form.secondary_color} onChange={(e) => setForm({ ...form, secondary_color: e.target.value })} aria-label="Header color" style={{ width: 42, height: 42, padding: 4, borderRadius: 8, border: "1px solid var(--border-default)", background: "var(--surface-0)", cursor: "pointer" }} />
             </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+          <div className="grid gap-2 md:grid-cols-2">
             <select className="inp" value={form.launcher_style} onChange={(e) => setForm({ ...form, launcher_style: e.target.value as "pill" | "circle" })}>
               <option value="pill">Pill Launcher</option>
               <option value="circle">Circle Launcher</option>
@@ -303,7 +295,7 @@ export function WidgetEmbed({ userId }: Props) {
         </Section>
 
         {/* Behavior */}
-        <Section icon={Bot} title="Behavior">
+        <Section icon={Bot} title="Behavior" description="Control how the assistant answers and escalates.">
           <select className="inp" value={form.bot_role} onChange={(e) => setForm({ ...form, bot_role: e.target.value })}>
             <option value="customer_support">Customer Care</option>
             <option value="hr_policy_assistant">HR Policy Assistant</option>
@@ -323,7 +315,7 @@ export function WidgetEmbed({ userId }: Props) {
         </Section>
 
         {/* Advanced */}
-        <Section icon={SlidersHorizontal} title="Advanced">
+        <Section icon={SlidersHorizontal} title="Advanced" description="Extra guardrails and deployment settings.">
           <textarea className="inp" value={form.custom_instructions} onChange={(e) => setForm({ ...form, custom_instructions: e.target.value })} rows={6} placeholder="Custom system instructions. Example: Ask for contact details before answering pricing questions." style={{ resize: "none" }} />
           <label style={{ display: "flex", alignItems: "center", gap: "0.625rem", cursor: "pointer", padding: "0.625rem 0.75rem", borderRadius: 8, background: "var(--surface-0)", border: "1px solid var(--border-subtle)" }}>
             <input type="checkbox" checked={form.collect_leads} onChange={(e) => setForm({ ...form, collect_leads: e.target.checked })} style={{ accentColor: "var(--accent)" }} />
@@ -344,7 +336,7 @@ export function WidgetEmbed({ userId }: Props) {
 
         {/* Embed code */}
         {widget?.embed_script && (
-          <div className="card-sm" style={{ padding: "1.125rem" }}>
+          <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
               <p style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-primary)" }}>Embed Code</p>
               <button

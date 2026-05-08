@@ -1,19 +1,29 @@
 import json
 import re
 import hashlib
+import hmac
+import secrets
+import smtplib
 import time
 from collections import Counter, defaultdict
 from collections.abc import AsyncIterator
+from datetime import datetime, timedelta
+from email.message import EmailMessage
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import Settings, get_settings
 from app.models.schemas import (
     ChatRequest,
     ChatResponse,
     DocumentItem,
+    AdminApiKey,
+    AdminApiKeyCreate,
+    AdminApiKeyUpdate,
+    AdminOverview,
     AuthResponse,
     ForgotPasswordRequest,
     GoogleAuthRequest,
@@ -76,6 +86,7 @@ def _auth_response(user: dict, refresh_token: str, settings: Settings) -> AuthRe
             "provider": user.get("provider") or "email",
             "avatar_url": user.get("avatar_url") or "",
             "email_verified": bool(user.get("email_verified")),
+            "is_admin": bool(user.get("is_admin")),
         },
     )
 
@@ -190,6 +201,54 @@ def _embed_script(request: Request, widget_id: str) -> str:
     )
 
 
+def _verification_hash(code: str, settings: Settings) -> str:
+    return hmac.new(settings.jwt_secret.encode("utf-8"), code.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _build_verification_email(to_email: str, code: str, settings: Settings) -> EmailMessage:
+    from_email = settings.smtp_from_email or settings.smtp_username
+    if not settings.smtp_host or not from_email:
+        raise HTTPException(status_code=500, detail="Email delivery is not configured. Set SMTP_HOST and SMTP_FROM_EMAIL.")
+
+    message = EmailMessage()
+    message["Subject"] = "Your Ragora verification code"
+    message["From"] = f"{settings.smtp_from_name} <{from_email}>"
+    message["To"] = to_email
+    message.set_content(
+        "\n".join(
+            [
+                "Welcome to Ragora.",
+                "",
+                f"Your verification code is {code}.",
+                f"It expires in {settings.email_verification_minutes} minutes.",
+                "",
+                "If you did not create this account, you can ignore this email.",
+            ]
+        )
+    )
+    return message
+
+
+def _send_smtp_message(message: EmailMessage, settings: Settings) -> None:
+    with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as server:
+        if settings.smtp_use_tls:
+            server.starttls()
+        if settings.smtp_username:
+            server.login(settings.smtp_username, settings.smtp_password)
+        server.send_message(message)
+
+
+async def _send_verification_code(user: dict, settings: Settings, db: DatabaseService) -> None:
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    expires_at = datetime.utcnow() + timedelta(minutes=settings.email_verification_minutes)
+    await db.create_email_verification(user["id"], _verification_hash(code, settings), expires_at)
+    message = _build_verification_email(user["email"], code, settings)
+    try:
+        await run_in_threadpool(_send_smtp_message, message, settings)
+    except (OSError, smtplib.SMTPException) as exc:
+        raise HTTPException(status_code=502, detail=f"Verification email could not be sent: {exc}") from exc
+
+
 def get_db() -> DatabaseService:
     from app.main import app
 
@@ -222,6 +281,19 @@ async def get_current_user(
     return user
 
 
+def _admin_email_set(settings: Settings) -> set[str]:
+    return {email.strip().lower() for email in settings.admin_emails.split(",") if email.strip()}
+
+
+async def get_admin_user(
+    user: dict = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    if bool(user.get("is_admin")) or user.get("email", "").lower() in _admin_email_set(settings):
+        return user
+    raise HTTPException(status_code=403, detail="Admin access required.")
+
+
 async def _issue_session(user: dict, request: Request, settings: Settings, db: DatabaseService) -> AuthResponse:
     refresh_token, token_hash, _ = create_refresh_token()
     await db.create_refresh_session(
@@ -243,6 +315,9 @@ async def signup(
     email = payload.email.strip().lower()
     existing = await db.get_user_by_email(email)
     if existing:
+        if existing.get("provider") == "email" and not existing.get("email_verified"):
+            await _send_verification_code(existing, settings, db)
+            return await _issue_session(existing, request, settings, db)
         raise HTTPException(status_code=409, detail="An account already exists for this email.")
 
     user = await db.create_user(
@@ -253,6 +328,7 @@ async def signup(
         password_hash=hash_password(payload.password),
         email_verified=False,
     )
+    await _send_verification_code(user, settings, db)
     return await _issue_session(user, request, settings, db)
 
 
@@ -266,6 +342,8 @@ async def login(
     user = await db.get_user_by_email(payload.email.strip().lower())
     if not user or not verify_password(payload.password, user.get("password_hash")):
         raise HTTPException(status_code=401, detail="Invalid email or password.")
+    if user.get("provider") == "email" and not user.get("email_verified"):
+        raise HTTPException(status_code=403, detail="Please verify your email before signing in.")
     return await _issue_session(user, request, settings, db)
 
 
@@ -330,7 +408,69 @@ async def me(user: dict = Depends(get_current_user)) -> dict:
         "provider": user.get("provider") or "email",
         "avatar_url": user.get("avatar_url") or "",
         "email_verified": bool(user.get("email_verified")),
+        "is_admin": bool(user.get("is_admin")),
     }
+
+
+@router.get("/admin/overview", response_model=AdminOverview)
+async def admin_overview(
+    admin: dict = Depends(get_admin_user),
+    db: DatabaseService = Depends(get_db),
+) -> dict:
+    return await db.admin_overview()
+
+
+@router.get("/admin/users")
+async def admin_users(
+    admin: dict = Depends(get_admin_user),
+    db: DatabaseService = Depends(get_db),
+) -> list[dict]:
+    return await db.list_users(limit=200)
+
+
+@router.get("/admin/api-keys", response_model=list[AdminApiKey])
+async def admin_api_keys(
+    service: str | None = Query(default=None),
+    admin: dict = Depends(get_admin_user),
+    db: DatabaseService = Depends(get_db),
+) -> list[dict]:
+    if service and service not in {"groq", "mistral"}:
+        raise HTTPException(status_code=400, detail="Unsupported service.")
+    return await db.list_api_keys(service=service)
+
+
+@router.post("/admin/api-keys", response_model=AdminApiKey)
+async def admin_create_api_key(
+    payload: AdminApiKeyCreate,
+    admin: dict = Depends(get_admin_user),
+    db: DatabaseService = Depends(get_db),
+) -> dict:
+    return await db.create_api_key(payload.model_dump())
+
+
+@router.patch("/admin/api-keys/{key_id}", response_model=AdminApiKey)
+async def admin_update_api_key(
+    key_id: str,
+    payload: AdminApiKeyUpdate,
+    admin: dict = Depends(get_admin_user),
+    db: DatabaseService = Depends(get_db),
+) -> dict:
+    update = {key: value for key, value in payload.model_dump().items() if value is not None}
+    if not update:
+        raise HTTPException(status_code=400, detail="No changes provided.")
+    row = await db.update_api_key(key_id, update)
+    if not row:
+        raise HTTPException(status_code=404, detail="API key not found.")
+    return row
+
+
+@router.delete("/admin/api-keys/{key_id}", status_code=204)
+async def admin_delete_api_key(
+    key_id: str,
+    admin: dict = Depends(get_admin_user),
+    db: DatabaseService = Depends(get_db),
+) -> None:
+    await db.delete_api_key(key_id)
 
 
 @router.post("/auth/forgot-password", response_model=StatusResponse)
@@ -347,10 +487,13 @@ async def reset_password(payload: ResetPasswordRequest) -> StatusResponse:
 async def verify_email(
     payload: VerifyEmailRequest,
     user: dict = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
     db: DatabaseService = Depends(get_db),
 ) -> StatusResponse:
-    if payload.code != "123456":
+    verification = await db.get_active_email_verification(user["id"])
+    if not verification or not hmac.compare_digest(verification["code_hash"], _verification_hash(payload.code, settings)):
         raise HTTPException(status_code=400, detail="Invalid verification code.")
+    await db.mark_email_verification_used(verification["id"])
     await db.update_user(user["id"], {"email_verified": True})
     return StatusResponse(ok=True, message="Email verified.")
 
@@ -420,6 +563,7 @@ async def upload_pdf(
 async def chat(
     request: ChatRequest,
     user: dict = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
     db: DatabaseService = Depends(get_db),
     embeddings: EmbeddingService = Depends(get_embeddings),
     llm: LLMService = Depends(get_llm),

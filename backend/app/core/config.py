@@ -21,6 +21,18 @@ class Settings(BaseSettings):
     access_token_minutes: int = 45
     refresh_token_days: int = 30
     google_client_id: str = ""
+    admin_emails: str = ""
+    bootstrap_admin_email: str = "support.ragora@gmail.com"
+    bootstrap_admin_password: str = "RAGORA#@2026"
+    key_rotation_cache_seconds: int = 30
+    email_verification_minutes: int = 10
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    smtp_from_name: str = "Ragora"
+    smtp_use_tls: bool = True
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

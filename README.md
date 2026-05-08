@@ -38,6 +38,7 @@ Ragora is a premium AI knowledge SaaS for uploading documents, embedding their c
 - Premium SaaS landing page with hero, trusted-by logos, features, product showcase, testimonials, FAQ, final CTA, and footer
 - Modern authentication UI for login, signup, Google, forgot password, reset password, and email OTP verification
 - Backend authentication with password hashing, JWT access tokens, refresh-token sessions, Google ID-token verification, and workspace-scoped API access
+- Admin console for users, API key pools, provider health, weighted random key rotation, and operational metrics
 - PDF upload with text extraction
 - Semantic document chunking with `chunk_size=1100` and `overlap=160`
 - Batched Mistral embeddings using `mistral-embed`
@@ -68,6 +69,8 @@ For the full Ragora auth system, also run [supabase/auth_upgrade.sql](/Users/hen
 
 If your project existed before the production RAG improvements, run [supabase/document_status_upgrade.sql](/Users/henilbhavsar/Documents/Codex/2026-05-06/you-are-a-senior-ai-engineer/supabase/document_status_upgrade.sql) to add document processing status, content-hash duplicate detection, and the improved retrieval function.
 
+For the admin panel and rotating provider API keys, run [supabase/admin_upgrade.sql](/Users/henilbhavsar/Documents/Codex/2026-05-06/you-are-a-senior-ai-engineer/supabase/admin_upgrade.sql). Admin access is granted when `users.is_admin = true` or the signed-in email is listed in `ADMIN_EMAILS`.
+
 ## Backend Setup
 
 ```bash
@@ -90,6 +93,8 @@ FRONTEND_ORIGIN=http://localhost:3000
 ALLOWED_ORIGINS=*
 JWT_SECRET=replace-with-a-long-random-secret
 GOOGLE_CLIENT_ID=your-google-oauth-client-id.apps.googleusercontent.com
+ADMIN_EMAILS=founder@yourcompany.com
+KEY_ROTATION_CACHE_SECONDS=30
 ```
 
 Run the API:
@@ -129,10 +134,18 @@ The main app routes live in `frontend/app`:
 - `/reset-password` password update UI
 - `/verify-email` OTP email verification UI
 - `/dashboard` authenticated product dashboard
+- `/admin` admin console for API key rotation, users, and system operations
 
 Reusable auth UI lives in `frontend/components/AuthPanel.tsx`. Auth client helpers live in `frontend/lib/auth.ts` and call the FastAPI auth endpoints for email login, signup, Google login, refresh-compatible session storage, password recovery UI, and email verification UI.
 
 For Google login, create a Google OAuth web client and set the same client ID in `frontend/.env.local` as `NEXT_PUBLIC_GOOGLE_CLIENT_ID` and in `backend/.env` as `GOOGLE_CLIENT_ID`. Set `JWT_SECRET` to a long random value before deploying.
+
+Admin API keys:
+
+- Add Groq and Mistral keys in `/admin`.
+- Enabled keys are selected randomly with weight-based load balancing.
+- If no admin-managed key exists for a provider, the backend falls back to `GROQ_API_KEY` or `MISTRAL_API_KEY` from `.env`.
+- Usage counts, failure counts, last usage, and last error are tracked for each key.
 
 ## API Endpoints
 

@@ -1,3 +1,5 @@
+import { getAccessToken } from "@/lib/auth";
+
 export type ChatRole = "user" | "bot";
 
 export type ChatMessage = {
@@ -64,6 +66,47 @@ export type WidgetHistory = {
     last_message: string;
     messages: Array<{ role: "user" | "bot"; message: string; timestamp: string; had_answer?: boolean | null }>;
   }>;
+};
+
+export type AdminOverview = {
+  users: number;
+  admins: number;
+  documents: number;
+  ready_documents: number;
+  processing_documents: number;
+  failed_documents: number;
+  chunks: number;
+  chats: number;
+  widgets: number;
+  live_widgets: number;
+  widget_messages: number;
+  api_keys: number;
+  enabled_api_keys: number;
+};
+
+export type AdminApiKey = {
+  id: string;
+  service: "groq" | "mistral";
+  name: string;
+  key_value: string;
+  is_enabled: boolean;
+  weight: number;
+  usage_count: number;
+  failure_count: number;
+  last_used_at?: string | null;
+  last_error: string;
+  created_at: string;
+};
+
+export type AdminUser = {
+  id: string;
+  email: string;
+  name: string;
+  workspace: string;
+  provider: string;
+  email_verified: boolean;
+  is_admin: boolean;
+  created_at: string;
 };
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
@@ -205,4 +248,46 @@ export async function streamChat(
     }
   }
 }
-import { getAccessToken } from "@/lib/auth";
+
+export function getAdminOverview() {
+  return jsonRequest<AdminOverview>("/admin/overview");
+}
+
+export function getAdminUsers() {
+  return jsonRequest<AdminUser[]>("/admin/users");
+}
+
+export function getAdminApiKeys() {
+  return jsonRequest<AdminApiKey[]>("/admin/api-keys");
+}
+
+export function createAdminApiKey(payload: {
+  service: "groq" | "mistral";
+  name: string;
+  key_value: string;
+  weight: number;
+  is_enabled: boolean;
+}) {
+  return jsonRequest<AdminApiKey>("/admin/api-keys", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateAdminApiKey(id: string, payload: Partial<Pick<AdminApiKey, "name" | "key_value" | "weight" | "is_enabled">>) {
+  return jsonRequest<AdminApiKey>(`/admin/api-keys/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteAdminApiKey(id: string) {
+  const token = getAccessToken();
+  const response = await fetch(`${API_BASE_URL}/admin/api-keys/${id}`, {
+    method: "DELETE",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  if (!response.ok) {
+    throw new Error(await errorMessage(response));
+  }
+}

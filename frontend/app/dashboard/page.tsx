@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
+import Link from "next/link";
 import {
   Activity,
   BarChart3,
@@ -84,6 +85,7 @@ export default function DashboardPage() {
   const [widgetHistory, setWidgetHistory] = useState<WidgetHistory | null>(null);
   const [activeView, setActiveView] = useState<View>("overview");
   const [isReady, setIsReady] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const currentView = NAV_ITEMS.find((n) => n.id === activeView) ?? NAV_ITEMS[0];
 
   useEffect(() => {
@@ -91,6 +93,7 @@ export default function DashboardPage() {
     const stored = session?.user.workspace || localStorage.getItem("rag_user_id");
     if (!stored) { router.replace("/login"); return; }
     setUserId(stored);
+    setIsAdmin(Boolean(session?.user.is_admin));
     setIsReady(true);
   }, [router]);
 
@@ -101,10 +104,13 @@ export default function DashboardPage() {
 
   async function refreshAll(uid = userId) {
     if (!uid) return;
-    const [history, docs, stats, wh] = await Promise.all([
+    const [history, docs, stats, wh] = await Promise.allSettled([
       getHistory(uid), getDocuments(uid), getAnalytics(uid), getWidgetHistory(uid),
-    ]);
-    setMessages(history); setDocuments(docs); setAnalytics(stats); setWidgetHistory(wh);
+    ] as const);
+    if (history.status === "fulfilled") setMessages(history.value);
+    if (docs.status === "fulfilled") setDocuments(docs.value);
+    if (stats.status === "fulfilled") setAnalytics(stats.value);
+    if (wh.status === "fulfilled") setWidgetHistory(wh.value);
   }
 
   async function handleDeleteDocument(docId: string) {
@@ -281,6 +287,11 @@ export default function DashboardPage() {
               className="hidden md:flex"
               style={{ alignItems: "center", gap: "0.5rem" }}
             >
+              {isAdmin && (
+                <Link href="/admin" className="rounded-lg border border-violet-300/20 bg-violet-300/10 px-3 py-1.5 text-xs font-semibold text-violet-100 hover:bg-violet-300/15">
+                  Admin
+                </Link>
+              )}
               <span className="rounded-full border border-teal-300/20 bg-teal-300/10 px-2.5 py-1 text-[11px] font-semibold text-teal-100">Secure</span>
               <div
                 style={{

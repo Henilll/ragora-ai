@@ -6,10 +6,8 @@ import { motion } from "framer-motion";
 import {
   ArrowRight,
   CheckCircle2,
-  Github,
   Loader2,
   LockKeyhole,
-  Mail,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
@@ -215,10 +213,6 @@ export function AuthPanel({ mode }: AuthPanelProps) {
   }, [googleClientId, isAuthMode, mode, router]);
 
   function handleProvider(provider: AuthProvider) {
-    if (provider === "github") {
-      setMessage("GitHub OAuth needs a GitHub OAuth app client id/secret. Google is wired now.");
-      return;
-    }
     if (!googleClientId || !window.google?.accounts.id) {
       setMessage("Set NEXT_PUBLIC_GOOGLE_CLIENT_ID in frontend/.env.local and GOOGLE_CLIENT_ID in backend/.env to enable Google login.");
       return;
@@ -327,7 +321,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
 
           {isAuthMode && (
             <>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3">
                 <div className="min-h-11 overflow-hidden rounded-lg border border-white/10 bg-white/[0.045]">
                   {googleClientId ? (
                     <div ref={googleButtonRef} className="flex min-h-11 w-full items-center justify-center" />
@@ -338,10 +332,6 @@ export function AuthPanel({ mode }: AuthPanelProps) {
                     </AuthProviderButton>
                   )}
                 </div>
-                <AuthProviderButton provider="github" onSelect={handleProvider}>
-                  <Github size={16} />
-                  Continue with GitHub
-                </AuthProviderButton>
               </div>
               <div className="my-6 flex items-center gap-3 text-xs uppercase text-slate-500">
                 <span className="h-px flex-1 bg-white/10" />
@@ -362,10 +352,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
             {mode !== "reset" && mode !== "verify" && (
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-slate-300">Email</span>
-                <div className="relative">
-                  <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                  <input className="auth-input pl-10" value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="you@company.com" required />
-                </div>
+                <input className="auth-input" value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="you@company.com" required />
               </label>
             )}
 

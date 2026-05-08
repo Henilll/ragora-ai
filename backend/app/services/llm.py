@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import httpx
 
 from app.core.config import Settings
+from app.services.db import DatabaseService
 from app.services.errors import ExternalServiceError
 
 
@@ -51,11 +52,11 @@ Never invent policies, prices, legal terms, guarantees, or document-backed detai
 
 
 class LLMService:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, db: DatabaseService | None = None) -> None:
         self._settings = settings
+        self._db = db
         self._client = httpx.AsyncClient(
             base_url="https://api.groq.com/openai/v1",
-            headers={"Authorization": f"Bearer {settings.groq_api_key}"},
             timeout=90,
         )
 
@@ -83,24 +84,46 @@ class LLMService:
         return await self.answer_with_messages([{"role": "user", "content": prompt}], temperature=0.1)
 
     async def answer_with_messages(self, messages: list[dict[str, str]], temperature: float = 0.18) -> str:
-        response = await self._client.post(
-            "/chat/completions",
-            json={
-                "model": self._settings.groq_model,
-                "messages": messages,
-                "temperature": temperature,
-                "top_p": 0.9,
-            },
-        )
-        try:
-            response.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            raise ExternalServiceError(
-                service="Groq",
-                status_code=exc.response.status_code,
-                detail=exc.response.text,
-            ) from exc
-        return response.json()["choices"][0]["message"]["content"].strip()
+        failed_key_ids: set[str] = set()
+        last_error: ExternalServiceError | None = None
+
+        for _ in range(4):
+            key_row = await self._db.choose_api_key("groq", self._settings.key_rotation_cache_seconds, failed_key_ids) if self._db else None
+            if not key_row and failed_key_ids:
+                if last_error:
+                    raise last_error
+                raise ExternalServiceError("Groq", None, "No enabled Groq API key is available.")
+            api_key = (key_row or {}).get("key_value") or self._settings.groq_api_key
+            response = await self._client.post(
+                "/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={
+                    "model": self._settings.groq_model,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "top_p": 0.9,
+                },
+            )
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                if self._db and key_row:
+                    failed_key_ids.add(key_row["id"])
+                    await self._db.record_api_key_failure(key_row["id"], exc.response.text)
+                    last_error = ExternalServiceError("Groq", exc.response.status_code, exc.response.text)
+                    continue
+                raise ExternalServiceError(
+                    service="Groq",
+                    status_code=exc.response.status_code,
+                    detail=exc.response.text,
+                ) from exc
+            if self._db and key_row:
+                await self._db.record_api_key_success(key_row["id"])
+            return response.json()["choices"][0]["message"]["content"].strip()
+
+        if last_error:
+            raise last_error
+        raise ExternalServiceError("Groq", None, "No enabled Groq API key is available.")
 
     async def stream_answer(self, context: str, question: str) -> AsyncIterator[str]:
         payload = RagAnswerInput(
@@ -127,40 +150,65 @@ class LLMService:
             yield token
 
     async def stream_with_messages(self, messages: list[dict[str, str]], temperature: float = 0.18) -> AsyncIterator[str]:
-        async with self._client.stream(
-            "POST",
-            "/chat/completions",
-            json={
-                "model": self._settings.groq_model,
-                "messages": messages,
-                "temperature": temperature,
-                "top_p": 0.9,
-                "stream": True,
-            },
-        ) as response:
-            try:
-                response.raise_for_status()
-            except httpx.HTTPStatusError as exc:
-                await exc.response.aread()
-                raise ExternalServiceError(
-                    service="Groq",
-                    status_code=exc.response.status_code,
-                    detail=exc.response.text,
-                ) from exc
-            async for line in response.aiter_lines():
-                if not line.startswith("data: "):
-                    continue
-                data = line.removeprefix("data: ").strip()
-                if data == "[DONE]":
-                    break
-                try:
-                    import json
+        failed_key_ids: set[str] = set()
+        last_error: ExternalServiceError | None = None
 
-                    delta = json.loads(data)["choices"][0]["delta"].get("content")
-                except (KeyError, ValueError):
-                    delta = None
-                if delta:
-                    yield delta
+        for _ in range(4):
+            key_row = await self._db.choose_api_key("groq", self._settings.key_rotation_cache_seconds, failed_key_ids) if self._db else None
+            if not key_row and failed_key_ids:
+                if last_error:
+                    raise last_error
+                raise ExternalServiceError("Groq", None, "No enabled Groq API key is available.")
+            api_key = (key_row or {}).get("key_value") or self._settings.groq_api_key
+            succeeded = False
+            async with self._client.stream(
+                "POST",
+                "/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={
+                    "model": self._settings.groq_model,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "top_p": 0.9,
+                    "stream": True,
+                },
+            ) as response:
+                try:
+                    response.raise_for_status()
+                except httpx.HTTPStatusError as exc:
+                    await exc.response.aread()
+                    if self._db and key_row:
+                        failed_key_ids.add(key_row["id"])
+                        await self._db.record_api_key_failure(key_row["id"], exc.response.text)
+                        last_error = ExternalServiceError("Groq", exc.response.status_code, exc.response.text)
+                        continue
+                    raise ExternalServiceError(
+                        service="Groq",
+                        status_code=exc.response.status_code,
+                        detail=exc.response.text,
+                    ) from exc
+                async for line in response.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    data = line.removeprefix("data: ").strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        import json
+
+                        delta = json.loads(data)["choices"][0]["delta"].get("content")
+                    except (KeyError, ValueError):
+                        delta = None
+                    if delta:
+                        succeeded = True
+                        yield delta
+                if succeeded and self._db and key_row:
+                    await self._db.record_api_key_success(key_row["id"])
+                return
+
+        if last_error:
+            raise last_error
+        raise ExternalServiceError("Groq", None, "No enabled Groq API key is available.")
 
 
 def _rag_messages(payload: RagAnswerInput) -> list[dict[str, str]]:
@@ -218,4 +266,3 @@ Retrieved document context:
         {"role": "system", "content": config},
         {"role": "user", "content": question},
     ]
-
