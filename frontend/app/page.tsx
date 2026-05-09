@@ -63,9 +63,27 @@ const features = [
 ];
 
 const testimonials = [
-  { quote: "Ragora made our help center feel alive in one afternoon. The quality bar feels like a product we would happily pay for.", name: "Henil Bhavsar", role: "Founder" },
-  { quote: "The widget captured buying questions our sales team was missing. It paid for itself before we finished onboarding.", name: "Yug Khatri", role: "CEO" },
-  { quote: "It feels elegant enough for customers and practical enough for operations. That combination is rare.", name: "Savan Patel", role: "COO" },
+  {
+    quote:
+      "Ragora made our help center feel alive in one afternoon. The quality bar feels like a product we would happily pay for.",
+    name: "Henil Bhavsar",
+    role: "Founder",
+    linkedin: "https://www.linkedin.com/in/henil-bhavsar-18b45b311/",
+  },
+  {
+    quote:
+      "The widget captured buying questions our sales team was missing. It paid for itself before we finished onboarding.",
+    name: "Yug Khatri",
+    role: "CEO",
+    linkedin: "https://www.linkedin.com/in/yug04/",
+  },
+  {
+    quote:
+      "It feels elegant enough for customers and practical enough for operations. That combination is rare.",
+    name: "Savan Patel",
+    role: "COO",
+    linkedin: "https://www.linkedin.com/in/savan-patel-777aa3323/",
+  },
 ];
 
 const faqs = [
@@ -258,7 +276,15 @@ export default function HomePage() {
           {testimonials.map((item) => (
             <article key={item.name} className="rounded-xl border border-white/10 bg-white/[0.035] p-6">
               <p className="text-base leading-7 text-slate-200">“{item.quote}”</p>
-              <p className="mt-6 font-semibold text-white">{item.name}</p>
+              <a
+                href={item.linkedin}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-6 inline-flex items-center gap-2 font-semibold text-white hover:text-violet-200 transition"
+              >
+                <Linkedin size={16} />
+                {item.name}
+              </a>
               <p className="text-sm text-slate-500">{item.role}</p>
             </article>
           ))}
@@ -290,41 +316,211 @@ export default function HomePage() {
           </Link>
         </div>
       </section>
+      <footer className="border-t border-white/10 bg-black/20 px-4 py-14 backdrop-blur-xl sm:px-6">
+        <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[1.2fr_2fr]">
 
-      <footer className="border-t border-white/10 px-4 py-10 sm:px-6">
-        <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-[1.2fr_2fr]">
+          {/* Left Side */}
           <div>
             <LogoMark />
-            <p className="mt-4 max-w-sm text-sm leading-6 text-slate-500">Ragora is the AI knowledge OS for companies that want trusted answers, beautiful UX, and deployment speed.</p>
-            <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.035] p-4">
-              <p className="text-xs font-semibold uppercase text-slate-500">Developer</p>
-              <p className="mt-2 text-lg font-semibold text-white">{developer.name}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <a href={developer.linkedin} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.045] px-3 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08] hover:text-white">
-                  <Linkedin size={15} />
-                  LinkedIn
-                </a>
-                <a href={`mailto:${developer.email}`} className="inline-flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.045] px-3 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08] hover:text-white">
-                  <Mail size={15} />
-                  {developer.email}
-                </a>
+
+            <p className="mt-5 max-w-md text-sm leading-7 text-slate-400">
+              Ragora is the AI knowledge operating system for modern companies —
+              built for customer support, internal operations, onboarding, and
+              intelligent workflow automation.
+            </p>
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <a
+                href={developer.linkedin}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-violet-400/40 hover:bg-violet-400/10 hover:text-white"
+              >
+                <Linkedin size={16} />
+                LinkedIn
+              </a>
+
+              <a
+                href={`mailto:${developer.email}`}
+                className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
+              >
+                <Mail size={16} />
+                Contact
+              </a>
+            </div>
+
+            <div className="mt-8 rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.05] to-white/[0.02] p-5">
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                Built by
+              </p>
+
+              <div className="mt-3 flex items-center gap-3">
+                <div className="grid h-11 w-11 place-items-center rounded-xl bg-violet-400/20 text-white">
+                  <Sparkles size={18} />
+                </div>
+
+                <div>
+                  <p className="font-semibold text-white">{developer.name}</p>
+                  <p className="text-sm text-slate-500">
+                    AI Engineer
+                  </p>
+                </div>
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-6 text-sm sm:grid-cols-4">
-            {["Product", "Resources", "Docs", "Company"].map((group) => (
-              <div key={group}>
-                <p className="mb-3 font-semibold text-white">{group}</p>
-                <div className="space-y-2 text-slate-500">
-                  {["API", "Privacy", "Terms", "Security"].map((link) => <p key={link}>{link}</p>)}
-                </div>
+
+          {/* Right Side */}
+          <div className="grid grid-cols-2 gap-10 sm:grid-cols-4">
+
+            {/* Product */}
+            <div>
+              <p className="mb-4 text-sm font-semibold text-white">
+                Product
+              </p>
+
+              <div className="space-y-3 text-sm text-slate-500">
+                <Link href="/dashboard" className="block transition hover:text-white">
+                  Dashboard
+                </Link>
+
+                <a href="#features" className="block transition hover:text-white">
+                  Features
+                </a>
+
+                <a href="#showcase" className="block transition hover:text-white">
+                  Showcase
+                </a>
+
+                <Link href="/signup" className="block transition hover:text-white">
+                  Start Free
+                </Link>
               </div>
-            ))}
+            </div>
+
+            {/* Resources */}
+            <div>
+              <p className="mb-4 text-sm font-semibold text-white">
+                Resources
+              </p>
+
+              <div className="space-y-3 text-sm text-slate-500">
+                <a
+                  href="https://github.com/Henilll"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block transition hover:text-white"
+                >
+                  GitHub
+                </a>
+
+                <a
+                  href={developer.linkedin}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block transition hover:text-white"
+                >
+                  LinkedIn
+                </a>
+
+                <a
+                  href={`mailto:${developer.email}`}
+                  className="block transition hover:text-white"
+                >
+                  Contact
+                </a>
+              </div>
+            </div>
+
+            {/* Company */}
+            <div>
+              <p className="mb-4 text-sm font-semibold text-white">
+                Company
+              </p>
+
+              <div className="space-y-3 text-sm text-slate-500">
+                <a href="#faq" className="block transition hover:text-white">
+                  FAQ
+                </a>
+
+                <a href="#features" className="block transition hover:text-white">
+                  Solutions
+                </a>
+
+                <a href="#showcase" className="block transition hover:text-white">
+                  Demo
+                </a>
+              </div>
+            </div>
+
+            {/* Developers */}
+            <div>
+              <p className="mb-4 text-sm font-semibold text-white">
+                Team
+              </p>
+
+              <div className="space-y-4">
+
+                <a
+                  href="https://www.linkedin.com/in/henil-bhavsar-18b45b311/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-2 text-sm text-slate-400 transition hover:text-white"
+                >
+                  <Linkedin size={15} />
+                  Henil Bhavsar
+                </a>
+
+                <a
+                  href="https://www.linkedin.com/in/yug04/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-2 text-sm text-slate-400 transition hover:text-white"
+                >
+                  <Linkedin size={15} />
+                  Yug Khatri
+                </a>
+
+                <a
+                  href="https://www.linkedin.com/in/savan-patel-777aa3323/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-2 text-sm text-slate-400 transition hover:text-white"
+                >
+                  <Linkedin size={15} />
+                  Savan Patel
+                </a>
+
+              </div>
+            </div>
           </div>
         </div>
-        <div className="mx-auto mt-10 flex max-w-7xl items-center justify-between border-t border-white/10 pt-6 text-sm text-slate-500">
-          <span>© 2026 Ragora. Developed by {developer.name}.</span>
-          <div className="flex gap-3"><Globe2 size={16} /></div>
+
+        {/* Bottom */}
+        <div className="mx-auto mt-12 flex max-w-7xl flex-col items-center justify-between gap-4 border-t border-white/10 pt-6 text-sm text-slate-500 sm:flex-row">
+
+          <p>
+            © 2026 Ragora. All rights reserved.
+          </p>
+
+          <div className="flex items-center gap-5">
+            <a
+              href={developer.linkedin}
+              target="_blank"
+              rel="noreferrer"
+              className="transition hover:text-white"
+            >
+              <Linkedin size={16} />
+            </a>
+
+            <a
+              href={`mailto:${developer.email}`}
+              className="transition hover:text-white"
+            >
+              <Mail size={16} />
+            </a>
+
+            <Globe2 size={16} />
+          </div>
         </div>
       </footer>
     </main>
