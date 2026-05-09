@@ -16,6 +16,9 @@ const DEFAULT_WIDGET = {
   secondary_color: "#0f172a",
   logo_url: "",
   icon_label: "AI",
+  company_name: "",
+  company_site: "",
+  company_email: "",
   launcher_style: "pill" as const,
   border_radius: 14,
   launcher_label: "Chat with AI",
@@ -38,7 +41,15 @@ const TEMPLATES = [
   { name: "Company FAQ", role: "internal_knowledge_base", goal: "Answer company, service, pricing, policy, and process FAQs.", welcome: "Hi. Ask me anything from this company's FAQ and documents.", fallback: "I do not know that from the available information yet.", color: "#10b981" },
 ];
 
-const LOGO_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+const PRESET_LOGOS = [
+  { label: "Spark", initials: "AI", bg: "#6366f1", fg: "#ffffff", shape: "spark" },
+  { label: "Support", initials: "S", bg: "#0ea5e9", fg: "#ffffff", shape: "chat" },
+  { label: "Growth", initials: "G", bg: "#10b981", fg: "#052e1a", shape: "bolt" },
+  { label: "Trust", initials: "T", bg: "#f59e0b", fg: "#241200", shape: "shield" },
+  { label: "Docs", initials: "D", bg: "#8b5cf6", fg: "#ffffff", shape: "doc" },
+];
+
+const LOGO_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"];
 const MAX_LOGO_BYTES = 1_000_000;
 
 function Section({ icon: Icon, title, description, children }: { icon: typeof Bot; title: string; description?: string; children: React.ReactNode }) {
@@ -90,7 +101,7 @@ function WidgetPreview({ form }: { form: WidgetForm }) {
               </div>
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-white">{form.title || "Ask AI"}</p>
-                <p className="text-[11px] text-white/55">Answers from your knowledge base</p>
+                <p className="text-[11px] text-white/55">{form.company_name || "Answers from your knowledge base"}</p>
               </div>
             </div>
             <div className="space-y-3 p-4">
@@ -102,6 +113,9 @@ function WidgetPreview({ form }: { form: WidgetForm }) {
               </div>
               <div className="max-w-[92%] rounded-lg bg-white/[0.08] px-3 py-2 text-xs leading-5">
                 Yes. I found the key onboarding steps and can cite the uploaded source document.
+              </div>
+              <div className="max-w-[92%] rounded-lg bg-white/[0.08] px-3 py-2 text-xs leading-5">
+                If I cannot answer, I will route visitors to {form.company_email || "your company email"}.
               </div>
               <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-500">
                 {form.input_placeholder || "Ask a question"}
@@ -139,15 +153,20 @@ export function WidgetEmbed({ userId }: Props) {
     const existing = await getWidget(userId);
     if (!existing) return;
     setWidget(existing);
-    setForm({ user_id: userId, title: existing.title, welcome_message: existing.welcome_message, theme: existing.theme, accent_color: existing.accent_color, secondary_color: existing.secondary_color, logo_url: existing.logo_url, icon_label: existing.icon_label, launcher_style: existing.launcher_style, border_radius: existing.border_radius, launcher_label: existing.launcher_label, input_placeholder: existing.input_placeholder, position: existing.position, bot_goal: existing.bot_goal, bot_role: existing.bot_role, tone: existing.tone, custom_instructions: existing.custom_instructions, fallback_message: existing.fallback_message, collect_leads: existing.collect_leads, is_enabled: existing.is_enabled });
+    setForm({ user_id: userId, title: existing.title, welcome_message: existing.welcome_message, theme: existing.theme, accent_color: existing.accent_color, secondary_color: existing.secondary_color, logo_url: existing.logo_url, icon_label: existing.icon_label, company_name: existing.company_name || "", company_site: existing.company_site || "", company_email: existing.company_email || "", launcher_style: existing.launcher_style, border_radius: existing.border_radius, launcher_label: existing.launcher_label, input_placeholder: existing.input_placeholder, position: existing.position, bot_goal: existing.bot_goal, bot_role: existing.bot_role, tone: existing.tone, custom_instructions: existing.custom_instructions, fallback_message: existing.fallback_message, collect_leads: existing.collect_leads, is_enabled: existing.is_enabled });
   }
 
   async function handleSave() {
     setIsSaving(true);
     setError(null);
     try {
-      const saved = await saveWidget(form);
+      const fallback =
+        form.company_email && !form.fallback_message.includes(form.company_email)
+          ? `I do not know based on the provided documents. Please contact ${form.company_email} for help.`
+          : form.fallback_message;
+      const saved = await saveWidget({ ...form, fallback_message: fallback });
       setWidget(saved);
+      setForm((current) => ({ ...current, fallback_message: saved.fallback_message }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save widget");
     } finally {
@@ -169,7 +188,7 @@ export function WidgetEmbed({ userId }: Props) {
   async function handleLogoFile(file: File) {
     setError(null);
     if (!LOGO_TYPES.includes(file.type)) {
-      setError("Upload a PNG, JPG, WebP, or GIF logo.");
+      setError("Upload a PNG, JPG, WebP, SVG, or GIF logo.");
       return;
     }
     if (file.size > MAX_LOGO_BYTES) {
@@ -186,6 +205,35 @@ export function WidgetEmbed({ userId }: Props) {
     } finally {
       setIsLogoUploading(false);
       if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  }
+
+  function presetSvg(preset: typeof PRESET_LOGOS[number]) {
+    const icon =
+      preset.shape === "chat"
+        ? '<path d="M30 22h52a10 10 0 0 1 10 10v26a10 10 0 0 1-10 10H51L32 82v-14h-2a10 10 0 0 1-10-10V32a10 10 0 0 1 10-10Z" fill="none" stroke="currentColor" stroke-width="6" stroke-linejoin="round"/>'
+        : preset.shape === "bolt"
+          ? '<path d="M58 12 28 58h24l-8 34 32-48H52l6-32Z" fill="currentColor"/>'
+          : preset.shape === "shield"
+            ? '<path d="M56 12 24 24v24c0 22 14 38 32 44 18-6 32-22 32-44V24L56 12Z" fill="none" stroke="currentColor" stroke-width="6" stroke-linejoin="round"/><path d="m42 52 10 10 22-24" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>'
+            : preset.shape === "doc"
+              ? '<path d="M32 16h34l18 18v54H32V16Z" fill="none" stroke="currentColor" stroke-width="6" stroke-linejoin="round"/><path d="M66 16v20h18M44 52h28M44 66h28" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>'
+              : '<path d="m56 12 8 28 28 8-28 8-8 28-8-28-28-8 28-8 8-28Z" fill="currentColor"/>';
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="112" height="112" viewBox="0 0 112 112"><rect width="112" height="112" rx="28" fill="${preset.bg}"/><g color="${preset.fg}">${icon}</g></svg>`;
+  }
+
+  async function selectPresetLogo(preset: typeof PRESET_LOGOS[number]) {
+    setError(null);
+    setIsLogoUploading(true);
+    try {
+      const blob = new Blob([presetSvg(preset)], { type: "image/svg+xml" });
+      const file = new File([blob], `${preset.label.toLowerCase()}-logo.svg`, { type: "image/svg+xml" });
+      const response = await uploadWidgetLogo(file);
+      setForm((c) => ({ ...c, logo_url: response.logo_url, icon_label: preset.initials, accent_color: preset.bg }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Preset logo could not be saved.");
+    } finally {
+      setIsLogoUploading(false);
     }
   }
 
@@ -273,7 +321,7 @@ export function WidgetEmbed({ userId }: Props) {
             <input
               ref={logoInputRef}
               type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
+              accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
               className="hidden"
               onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -315,14 +363,38 @@ export function WidgetEmbed({ userId }: Props) {
                     </button>
                   )}
                 </div>
-                <p className="mt-2 text-xs leading-5 text-slate-500">Stored in Supabase Storage. PNG, JPG, WebP, or GIF up to 1 MB.</p>
+                <p className="mt-2 text-xs leading-5 text-slate-500">Stored in Supabase Storage. PNG, JPG, WebP, SVG, or GIF up to 1 MB.</p>
               </div>
             </div>
             <div className="mt-3 grid gap-2 md:grid-cols-[1fr_140px]">
               <input className="inp" value={form.logo_url} onChange={(e) => setForm({ ...form, logo_url: e.target.value })} placeholder="Logo URL" />
               <input className="inp" value={form.icon_label} onChange={(e) => setForm({ ...form, icon_label: e.target.value.slice(0, 3).toUpperCase() })} placeholder="Icon letters" />
             </div>
+            <div className="mt-3">
+              <p className="mb-2 text-xs font-semibold uppercase text-slate-500">Built-in logos</p>
+              <div className="grid grid-cols-5 gap-2">
+                {PRESET_LOGOS.map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => void selectPresetLogo(preset)}
+                    disabled={isLogoUploading}
+                    className="grid h-12 place-items-center rounded-lg border border-white/10 text-xs font-bold transition hover:-translate-y-0.5 disabled:opacity-50"
+                    style={{ background: preset.bg, color: preset.fg }}
+                    aria-label={`Use ${preset.label} logo`}
+                    title={preset.label}
+                  >
+                    {preset.initials}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            <input className="inp" value={form.company_name} onChange={(e) => setForm({ ...form, company_name: e.target.value })} placeholder="Company name" />
+            <input className="inp" value={form.company_email} onChange={(e) => setForm({ ...form, company_email: e.target.value })} type="email" placeholder="Company support email" />
+          </div>
+          <input className="inp" value={form.company_site} onChange={(e) => setForm({ ...form, company_site: e.target.value })} placeholder="Company website (optional)" />
           <input className="inp" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Widget title" />
           <input className="inp" value={form.launcher_label} onChange={(e) => setForm({ ...form, launcher_label: e.target.value })} placeholder="Launcher button label" />
           <input className="inp" value={form.input_placeholder} onChange={(e) => setForm({ ...form, input_placeholder: e.target.value })} placeholder="Input placeholder text" />

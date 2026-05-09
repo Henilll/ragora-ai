@@ -68,6 +68,7 @@ LOGO_CONTENT_TYPES = {
     "image/jpeg": "jpg",
     "image/webp": "webp",
     "image/gif": "gif",
+    "image/svg+xml": "svg",
 }
 MAX_WIDGET_LOGO_BYTES = 1_000_000
 
@@ -196,6 +197,14 @@ def _has_answer(answer: str, fallback_message: str = "I don't know.") -> bool:
     normalized = _normalize_message(answer).strip(".!")
     fallback = _normalize_message(fallback_message).strip(".!")
     return normalized not in {"i don't know", "i do not know"} and normalized != fallback
+
+
+def _widget_fallback_message(widget: dict) -> str:
+    fallback = widget.get("fallback_message") or "I do not know based on the provided documents."
+    company_email = (widget.get("company_email") or "").strip()
+    if company_email and "@" not in fallback:
+        return f"I do not know based on the provided documents. Please contact {company_email} for help."
+    return fallback
 
 
 def _embed_script(request: Request, widget_id: str) -> str:
@@ -468,7 +477,33 @@ async def admin_users(
     admin: dict = Depends(get_admin_user),
     db: DatabaseService = Depends(get_db),
 ) -> list[dict]:
-    return await db.list_users(limit=200)
+    auth_users = await db.list_auth_users(per_page=200)
+    app_users = await db.list_users(limit=500)
+    app_by_email = {user.get("email", "").lower(): user for user in app_users}
+    admin_emails = _admin_email_set(get_settings())
+
+    rows: list[dict] = []
+    for auth_user in auth_users:
+        email = (auth_user.get("email") or "").lower()
+        metadata = auth_user.get("user_metadata") or {}
+        app_metadata = auth_user.get("app_metadata") or {}
+        app_user = app_by_email.get(email, {})
+        provider = app_metadata.get("provider") or (app_metadata.get("providers") or ["email"])[0]
+        rows.append(
+            {
+                "id": auth_user.get("id") or app_user.get("id") or email,
+                "email": email,
+                "name": metadata.get("full_name") or metadata.get("name") or app_user.get("name") or email.split("@", 1)[0],
+                "workspace": app_user.get("workspace") or "-",
+                "provider": provider,
+                "email_verified": bool(auth_user.get("email_confirmed_at")),
+                "is_admin": bool(app_user.get("is_admin")) or email in admin_emails,
+                "created_at": auth_user.get("created_at") or app_user.get("created_at"),
+                "last_sign_in_at": auth_user.get("last_sign_in_at"),
+                "source": "auth",
+            }
+        )
+    return rows
 
 
 @router.get("/admin/api-keys", response_model=list[AdminApiKey])
@@ -688,7 +723,7 @@ async def upload_widget_logo(
     content_type = (file.content_type or "").lower()
     extension = LOGO_CONTENT_TYPES.get(content_type)
     if not extension:
-        raise HTTPException(status_code=415, detail="Upload a PNG, JPG, WebP, or GIF logo.")
+        raise HTTPException(status_code=415, detail="Upload a PNG, JPG, WebP, SVG, or GIF logo.")
 
     content = await file.read(MAX_WIDGET_LOGO_BYTES + 1)
     if len(content) > MAX_WIDGET_LOGO_BYTES:
@@ -732,6 +767,9 @@ async def public_widget_config(widget_id: str, db: DatabaseService = Depends(get
         "secondary_color": widget["secondary_color"],
         "logo_url": widget["logo_url"],
         "icon_label": widget["icon_label"],
+        "company_name": widget.get("company_name", ""),
+        "company_site": widget.get("company_site", ""),
+        "company_email": widget.get("company_email", ""),
         "launcher_style": widget["launcher_style"],
         "border_radius": widget["border_radius"],
         "launcher_label": widget["launcher_label"],
@@ -808,7 +846,7 @@ async def widget_chat(
         "bot",
         token_count=_estimate_tokens(answer),
         latency_ms=int((time.perf_counter() - started_at) * 1000),
-        had_answer=_has_answer(answer, widget["fallback_message"]),
+        had_answer=_has_answer(answer, _widget_fallback_message(widget)),
     )
     return ChatResponse(answer=answer, sources=sources)
 
@@ -965,7 +1003,7 @@ async def _stream_widget_answer(
         "bot",
         token_count=_estimate_tokens(answer),
         latency_ms=int((time.perf_counter() - started_at) * 1000),
-        had_answer=_has_answer(answer, widget["fallback_message"]),
+        had_answer=_has_answer(answer, _widget_fallback_message(widget)),
     )
     yield "event: done\ndata: [DONE]\n\n"
 

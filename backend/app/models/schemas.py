@@ -159,6 +159,9 @@ class WidgetConfigRequest(BaseModel):
     secondary_color: str = "#0f172a"
     logo_url: str = ""
     icon_label: str = "AI"
+    company_name: str = ""
+    company_site: str = ""
+    company_email: str = ""
     launcher_style: Literal["pill", "circle"] = "pill"
     border_radius: int = 14
     launcher_label: str = "Chat with AI"
@@ -183,6 +186,9 @@ class WidgetConfig(BaseModel):
     secondary_color: str
     logo_url: str
     icon_label: str
+    company_name: str = ""
+    company_site: str = ""
+    company_email: str = ""
     launcher_style: Literal["pill", "circle"]
     border_radius: int
     launcher_label: str

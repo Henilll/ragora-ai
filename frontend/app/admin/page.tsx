@@ -297,12 +297,22 @@ export default function AdminPage() {
             </section>
 
             <section className="rounded-xl border border-white/10 bg-white/[0.035] p-5">
-              <div className="mb-4 flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-violet-200" />
-                <p className="font-semibold text-white">Recent workspaces</p>
+              <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-violet-200" />
+                  <div>
+                    <p className="font-semibold text-white">Supabase Auth users</p>
+                    <p className="text-xs text-slate-500">Users are listed from Authentication and enriched with workspace data when available.</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <span className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-300">{users.length} auth users</span>
+                  <span className="rounded-lg border border-teal-300/20 bg-teal-300/10 px-3 py-1.5 text-xs text-teal-100">{users.filter((user) => user.email_verified).length} verified</span>
+                  <span className="rounded-lg border border-violet-300/20 bg-violet-300/10 px-3 py-1.5 text-xs text-violet-100">{users.filter((user) => user.is_admin).length} admins</span>
+                </div>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] text-left text-sm">
+                <table className="w-full min-w-[920px] text-left text-sm">
                   <thead className="text-xs uppercase tracking-[0.04em] text-slate-500">
                     <tr>
                       <th className="pb-3">User</th>
@@ -310,6 +320,8 @@ export default function AdminPage() {
                       <th className="pb-3">Provider</th>
                       <th className="pb-3">Verified</th>
                       <th className="pb-3">Admin</th>
+                      <th className="pb-3">Last sign in</th>
+                      <th className="pb-3">Source</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/10">
@@ -323,6 +335,8 @@ export default function AdminPage() {
                         <td className="py-3 capitalize text-slate-400">{user.provider}</td>
                         <td className="py-3">{user.email_verified ? <CheckCircle2 className="h-4 w-4 text-teal-300" /> : <span className="text-slate-600">No</span>}</td>
                         <td className="py-3">{user.is_admin ? <ShieldCheck className="h-4 w-4 text-violet-200" /> : <span className="text-slate-600">No</span>}</td>
+                        <td className="py-3 text-slate-400">{user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString() : "Never"}</td>
+                        <td className="py-3"><span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-slate-300">{user.source || "auth"}</span></td>
                       </tr>
                     ))}
                   </tbody>

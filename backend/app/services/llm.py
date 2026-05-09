@@ -227,9 +227,21 @@ def _rag_messages(payload: RagAnswerInput) -> list[dict[str, str]]:
 
 
 def _widget_messages(context: str, question: str, widget: dict) -> list[dict[str, str]]:
+    company_email = (widget.get("company_email") or "").strip()
     fallback = widget.get("fallback_message") or "I do not know based on the provided documents."
+    if company_email and "@" not in fallback:
+        fallback = f"I do not know based on the provided documents. Please contact {company_email} for help."
     config = f"""Business goal:
 {widget.get("bot_goal") or "Answer visitor questions using the uploaded documents."}
+
+Company:
+{widget.get("company_name") or "Not provided."}
+
+Company website:
+{widget.get("company_site") or "Not provided."}
+
+Company contact email:
+{company_email or "Not provided."}
 
 Role/persona:
 {widget.get("bot_role") or "customer_support"}

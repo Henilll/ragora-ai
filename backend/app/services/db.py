@@ -141,6 +141,21 @@ class DatabaseService:
         )
         return response.json()
 
+    async def list_auth_users(self, page: int = 1, per_page: int = 200) -> list[dict]:
+        response = await self._storage_client.get(
+            "/auth/v1/admin/users",
+            params={"page": str(page), "per_page": str(per_page)},
+        )
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise ExternalServiceError(
+                service="Supabase Auth",
+                status_code=exc.response.status_code,
+                detail=exc.response.text,
+            ) from exc
+        return response.json().get("users", [])
+
     async def create_refresh_session(
         self,
         user_id: str,
@@ -327,6 +342,9 @@ class DatabaseService:
             "secondary_color": config["secondary_color"],
             "logo_url": config["logo_url"],
             "icon_label": config["icon_label"],
+            "company_name": config.get("company_name", ""),
+            "company_site": config.get("company_site", ""),
+            "company_email": config.get("company_email", ""),
             "launcher_style": config["launcher_style"],
             "border_radius": config["border_radius"],
             "launcher_label": config["launcher_label"],
@@ -370,7 +388,7 @@ class DatabaseService:
                 "name": bucket,
                 "public": True,
                 "file_size_limit": 1_000_000,
-                "allowed_mime_types": ["image/png", "image/jpeg", "image/webp", "image/gif"],
+                "allowed_mime_types": ["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"],
             },
         )
         if response.status_code not in {200, 201, 409}:
@@ -558,13 +576,14 @@ class DatabaseService:
 
     async def admin_overview(self) -> dict:
         users = await self.list_users(limit=500)
+        auth_users = await self.list_auth_users(per_page=500)
         docs = (await self._request("GET", "documents", params={"select": "id,status,chunk_count"})).json()
         keys = await self.list_api_keys(include_values=False)
         widgets = (await self._request("GET", "chat_widgets", params={"select": "id,is_enabled"})).json()
         chats = (await self._request("GET", "chats", params={"select": "id"})).json()
         widget_chats = (await self._request("GET", "widget_chats", params={"select": "id"})).json()
         return {
-            "users": len(users),
+            "users": len(auth_users) or len(users),
             "admins": len([user for user in users if user.get("is_admin")]),
             "documents": len(docs),
             "ready_documents": len([doc for doc in docs if doc.get("status", "ready") == "ready"]),

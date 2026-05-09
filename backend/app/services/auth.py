@@ -144,7 +144,7 @@ async def verify_supabase_access_token(access_token: str, settings: Settings) ->
     metadata = data.get("user_metadata") or {}
     app_metadata = data.get("app_metadata") or {}
     provider = app_metadata.get("provider") or "email"
-    if provider not in {"email", "google"}:
+    if provider not in {"email", "google", "github"}:
         provider = "email"
 
     return {

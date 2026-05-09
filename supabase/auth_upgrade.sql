@@ -3,7 +3,7 @@ create table if not exists public.users (
   email text not null unique,
   name text not null,
   workspace text not null unique,
-  provider text not null default 'email' check (provider in ('email', 'google')),
+  provider text not null default 'email' check (provider in ('email', 'google', 'github')),
   password_hash text,
   avatar_url text not null default '',
   email_verified boolean not null default false,
@@ -15,6 +15,12 @@ create table if not exists public.users (
 
 alter table public.users
   add column if not exists is_admin boolean not null default false;
+
+alter table public.users
+  drop constraint if exists users_provider_check;
+
+alter table public.users
+  add constraint users_provider_check check (provider in ('email', 'google', 'github'));
 
 create table if not exists public.refresh_sessions (
   id uuid primary key default gen_random_uuid(),

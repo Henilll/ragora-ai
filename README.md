@@ -95,6 +95,77 @@ User Question ──► Embedding ──► Vector Search ──► Context Inje
 </details>
 
 ---
+=======
+Ragora is a production-ready AI knowledge SaaS for uploading PDFs, indexing them with Mistral embeddings, answering questions with Groq, and deploying a branded website chatbot widget.
+
+It includes a Next.js dashboard, FastAPI backend, Supabase Postgres/pgvector storage, Supabase Auth bridging, admin API-key rotation, widget analytics, visitor chat history, and Supabase Storage-backed widget logo uploads.
+
+## Features
+
+- Secure email and Google auth with Supabase Auth plus backend JWT sessions.
+- Bootstrap/admin login support for backend-created admin users.
+- Admin panel for users, system metrics, and Groq/Mistral API-key pools.
+- Health/load-aware API-key rotation with retries, failure tracking, and environment-key fallback.
+- PDF upload, duplicate detection, processing status, chunking, and pgvector search.
+- RAG answers scoped to uploaded documents and recent workspace memory.
+- Streaming chat responses for dashboard and embedded website widgets.
+- Widget builder with templates, branding, colors, tone, fallback behavior, lead collection, and embed script.
+- Widget logo upload via authenticated backend endpoint and Supabase Storage.
+- Widget visitor analytics, unanswered questions, and conversation history.
+
+## Tech Stack
+
+- Frontend: Next.js 14, React, TypeScript, Tailwind CSS, Framer Motion, Lucide icons.
+- Backend: FastAPI, httpx, custom JWT sessions, PDF text extraction.
+- Database: Supabase Postgres with pgvector.
+- Auth: Supabase Auth for browser login, backend JWT for API authorization.
+- Storage: Supabase Storage for widget logo assets.
+- AI: Mistral embeddings and Groq chat completions.
+
+## Project Structure
+
+```text
+.
+├── backend/
+│   ├── app/
+│   │   ├── api/routes.py
+│   │   ├── core/config.py
+│   │   ├── models/schemas.py
+│   │   ├── services/
+│   │   ├── static/widget.js
+│   │   └── main.py
+│   ├── .env.example
+│   └── requirements.txt
+├── frontend/
+│   ├── app/
+│   ├── components/
+│   ├── lib/
+│   ├── .env.example
+│   └── package.json
+└── supabase/
+    ├── schema.sql
+    ├── auth_upgrade.sql
+    ├── document_status_upgrade.sql
+    ├── widget_upgrade.sql
+    └── admin_upgrade.sql
+```
+
+## Supabase Setup
+
+1. Create a Supabase project.
+2. Open the SQL editor.
+3. Run `supabase/schema.sql`.
+4. If upgrading an older database, also run:
+   - `supabase/auth_upgrade.sql`
+   - `supabase/document_status_upgrade.sql`
+   - `supabase/widget_upgrade.sql`
+   - `supabase/admin_upgrade.sql`
+5. Copy your project URL, anon key, and service role key.
+
+The backend uses the service role key and enforces workspace filtering server-side. The browser never receives the service role key, Groq key, or Mistral key.
+
+Widget logos are uploaded to the `ragora-widget-assets` Supabase Storage bucket by the backend. The backend creates the bucket automatically on first logo upload when the service role key has Storage permissions.
+>>>>>>> e94134f (Updated project)
 
 ## 🛠️ Tech Stack
 
@@ -148,6 +219,7 @@ User Question ──► Embedding ──► Vector Search ──► Context Inje
 ## 📁 Folder Structure
 
 ```bash
+ HEAD
 ragora-ai/
 ├── app/                          # Next.js App Router
 │   ├── (auth)/                   # Auth pages (login, signup)
@@ -178,6 +250,24 @@ ragora-ai/
 ├── public/                       # Static assets
 ├── .env.local                    # Local env variables
 └── drizzle.config.ts             # Drizzle ORM config
+=======
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+MISTRAL_API_KEY=your-mistral-api-key
+GROQ_API_KEY=your-groq-api-key
+GROQ_MODEL=llama3-8b-8192
+FRONTEND_ORIGIN=http://localhost:3000
+ALLOWED_ORIGINS=*
+JWT_SECRET=replace-with-a-long-random-secret
+ACCESS_TOKEN_MINUTES=45
+REFRESH_TOKEN_DAYS=30
+GOOGLE_CLIENT_ID=your-google-oauth-client-id.apps.googleusercontent.com
+ADMIN_EMAILS=founder@yourcompany.com
+BOOTSTRAP_ADMIN_EMAIL=support.ragora@gmail.com
+BOOTSTRAP_ADMIN_PASSWORD=RAGORA#@2026
+KEY_ROTATION_CACHE_SECONDS=30
+WIDGET_ASSET_BUCKET=ragora-widget-assets
+ e94134f (Updated project)
 ```
 
 ---
@@ -206,6 +296,7 @@ pnpm install
 
 # 3. Copy environment variables
 cp .env.example .env.local
+ HEAD
 
 # 4. Push database schema
 pnpm db:push
@@ -273,10 +364,27 @@ pnpm lint
 # Database migrations
 pnpm db:push        # Push schema to DB
 pnpm db:studio      # Open Drizzle Studio (DB GUI)
+=======
+```
+
+Fill `frontend/.env.local`:
+
+```bash
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+```
+
+Run the app:
+
+```bash
+npm run dev
+>>>>>>> e94134f (Updated project)
 ```
 
 ---
 
+ HEAD
 ## 🐳 Docker Setup
 
 ```dockerfile
@@ -644,7 +752,7 @@ Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for more informa
 
 <div align="center">
 
-[![Star History Chart](https://api.star-history.com/svg?repos=YOUR_USERNAME/ragora-ai&type=Date)](https://star-history.com/#YOUR_USERNAME/ragora-ai&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=YOUR_USERNAME/ragora-ai&type=Date)](https://star-history.com/#Henilll/ragora-ai&Date)
 
 </div>
 
@@ -669,3 +777,129 @@ Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for more informa
 *© 2025 Ragora AI. All rights reserved.*
 
 </div>
+=======
+## Auth Notes
+
+Ragora uses Supabase Auth in the browser and then bridges the Supabase access token into a backend JWT session through `POST /auth/supabase`.
+
+Email login also supports backend-created users. This is important for the bootstrap admin:
+
+```text
+email: support.ragora@gmail.com
+password: RAGORA#@2026
+```
+
+Set your own `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_PASSWORD`, and `ADMIN_EMAILS` before production.
+
+## Admin Panel
+
+Open `/admin` after signing in as an admin.
+
+Admins can:
+
+- View users, documents, widget counts, chat counts, and key health.
+- Add Groq and Mistral keys.
+- Enable/disable provider keys.
+- Adjust rotation weights.
+- Delete compromised or exhausted keys.
+
+Key selection is load-aware:
+
+- Prefers lower-use and lower-failure keys.
+- Respects configured weight.
+- Tracks local in-flight usage to avoid overloading one key during bursts.
+- Retries alternate keys when one fails.
+- Falls back to `.env` keys when the managed pool is unavailable.
+
+## Widget Builder
+
+After login, open Dashboard → Builder.
+
+You can configure:
+
+- Widget title, welcome message, and launcher label.
+- Dark/light theme.
+- Accent and header colors.
+- Launcher shape and position.
+- Bot role, goal, tone, custom instructions, and fallback message.
+- Lead collection.
+- Logo upload.
+
+Logo uploads are saved through `POST /widgets/logo` to Supabase Storage. The widget record stores only the final public `logo_url`, keeping the database small and stable.
+
+## Embed Script
+
+After saving the widget, copy the generated script:
+
+```html
+<script
+  src="http://localhost:8000/widget/ragora-chat.js"
+  data-key="w_example123"
+  data-mode="search"
+  data-shortcut="true"
+  data-theme="auto"
+  defer></script>
+```
+
+For a custom trigger button:
+
+```html
+<button class="ask-ai-trigger">Ask AI</button>
+
+<script
+  src="http://localhost:8000/widget/ragora-chat.js"
+  data-key="w_example123"
+  data-trigger-selector=".ask-ai-trigger"
+  data-shortcut="true"
+  data-theme="auto"
+  defer></script>
+```
+
+## Core API Endpoints
+
+- `POST /auth/supabase` bridge Supabase Auth to backend JWT.
+- `POST /auth/login` backend email login.
+- `GET /auth/me` current backend user.
+- `POST /upload` upload and index a PDF.
+- `GET /documents` list workspace documents.
+- `DELETE /documents/{document_id}` delete a document and its chunks.
+- `POST /chat` ask dashboard chatbot.
+- `GET /history` dashboard chat history.
+- `POST /widgets` create/update widget config.
+- `POST /widgets/logo` upload widget logo.
+- `GET /widgets` get workspace widget.
+- `GET /widgets/{widget_id}/config` public widget config.
+- `POST /widgets/{widget_id}/chat` public widget chat.
+- `GET /analytics` widget analytics.
+- `GET /widget-history` visitor conversation history.
+- `GET /admin/overview` admin metrics.
+- `GET /admin/users` admin user list.
+- `GET/POST/PATCH/DELETE /admin/api-keys` provider key pool management.
+
+## Production Checklist
+
+- Replace `JWT_SECRET` with a long random secret.
+- Replace bootstrap admin credentials.
+- Set `ADMIN_EMAILS` to trusted admin emails only.
+- Configure Supabase Auth redirect URLs:
+  - `http://localhost:3000/auth/callback` for local dev.
+  - `https://your-domain.com/auth/callback` for production.
+- Set `ALLOWED_ORIGINS` to your frontend and customer domains.
+- Keep `SUPABASE_SERVICE_ROLE_KEY`, `GROQ_API_KEY`, and `MISTRAL_API_KEY` server-only.
+- Use multiple Groq/Mistral keys in `/admin` for reliable production traffic.
+- Monitor failed documents, unanswered widget questions, and provider key failures in `/admin`.
+
+## Verification
+
+```bash
+cd frontend
+npm run build
+```
+
+```bash
+cd ..
+python3 -m compileall backend/app
+```
+
+Both should pass before deployment.
+ e94134f (Updated project)

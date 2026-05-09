@@ -30,6 +30,9 @@ export type WidgetConfig = {
   secondary_color: string;
   logo_url: string;
   icon_label: string;
+  company_name: string;
+  company_site: string;
+  company_email: string;
   launcher_style: "pill" | "circle";
   border_radius: number;
   launcher_label: string;
@@ -106,7 +109,9 @@ export type AdminUser = {
   provider: string;
   email_verified: boolean;
   is_admin: boolean;
-  created_at: string;
+  created_at?: string;
+  last_sign_in_at?: string | null;
+  source?: string;
 };
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";

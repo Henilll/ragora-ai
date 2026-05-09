@@ -1,6 +1,6 @@
 import { isSupabaseAuthConfigured, supabase } from "@/lib/supabase";
 
-export type AuthProvider = "email" | "google";
+export type AuthProvider = "email" | "google" | "github";
 
 export type AuthUser = {
   id: string;
@@ -167,6 +167,17 @@ export async function loginWithGoogle() {
         access_type: "offline",
         prompt: "select_account",
       },
+    },
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function loginWithGithub() {
+  requireSupabaseAuth();
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "github",
+    options: {
+      redirectTo: `${window.location.origin}/auth/callback`,
     },
   });
   if (error) throw new Error(error.message);
