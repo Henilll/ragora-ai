@@ -393,51 +393,8 @@ The platform is optimized for scalable inference workloads and low-latency AI re
 
 </div>
 
----
 
-# 📊 Contribution Activity
 
-<div align="center">
-
-<img src="https://github-readme-activity-graph.vercel.app/graph?username=YOUR_USERNAME&theme=tokyo-night&hide_border=true&bg_color=00000000"/>
-
-</div>
-
----
-
-# 🐍 Contribution Snake
-
-<div align="center">
-
-<img src="https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_USERNAME/output/github-contribution-grid-snake-dark.svg" width="100%" />
-
-</div>
-
----
-
-# 📸 Product Screenshots
-
-## Dashboard
-
-```md
-![Dashboard](./screenshots/dashboard.png)
-```
-
----
-
-## Conversational Interface
-
-```md
-![Chat Interface](./screenshots/chat-ui.png)
-```
-
----
-
-## Upload System
-
-```md
-![Upload Interface](./screenshots/upload.png)
-```
 
 ---
 
