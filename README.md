@@ -481,12 +481,12 @@ MIT License © 2026 Ragora AI
 
 # 👨‍💻 Author
 
-### Your Name
+### Henil Bhavsar
 
 AI/ML Engineer • Python Developer • Generative AI Developer
 
-- GitHub: https://github.com/YOUR_USERNAME
-- LinkedIn: https://linkedin.com/in/YOUR_USERNAME
+- GitHub: https://github.com/Henilll
+- LinkedIn: https://www.linkedin.com/in/henil-bhavsar-18b45b311/
 
 ---
 
@@ -494,7 +494,7 @@ AI/ML Engineer • Python Developer • Generative AI Developer
 
 For support, collaboration, or enterprise inquiries:
 
-📧 yourmail@example.com
+📧 henilbhavsar164@gmail.com
 
 🌐 https://ragora-ai.vercel.app
 
