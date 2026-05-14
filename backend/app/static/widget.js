@@ -72,6 +72,9 @@
       ".ragw-form{display:flex;gap:8px;padding:12px;border-top:1px solid rgba(148,163,184,.22)}",
       ".ragw-input{flex:1;min-width:0;border:1px solid rgba(148,163,184,.28);border-radius:10px;background:transparent;color:inherit;padding:10px 11px;font-size:14px;outline:none}",
       ".ragw-send{border:0;border-radius:10px;font-weight:700;padding:0 14px;cursor:pointer}.ragw-send:disabled{opacity:.55;cursor:not-allowed}",
+      ".ragw-powered{display:flex;align-items:center;justify-content:center;padding:9px 12px 11px;border-top:1px solid rgba(148,163,184,.16);text-decoration:none;color:inherit}",
+      ".ragw-powered-badge{display:inline-flex;align-items:center;gap:7px;min-height:28px;border:1px solid rgba(148,163,184,.22);border-radius:999px;padding:4px 10px 4px 5px;background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.04));box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 10px 28px rgba(2,6,23,.14);font-size:11px;line-height:1;opacity:.78;transition:opacity .16s ease,transform .16s ease,border-color .16s ease}",
+      ".ragw-powered:hover .ragw-powered-badge{opacity:1;transform:translateY(-1px);border-color:rgba(99,102,241,.42)}.ragw-powered-mark{display:grid;place-items:center;width:20px;height:20px;border-radius:999px;background:linear-gradient(135deg,#14b8a6 0%,#6366f1 58%,#a855f7 100%);color:#fff;font-size:11px;font-weight:900;box-shadow:0 6px 16px rgba(99,102,241,.34)}.ragw-powered-copy{display:flex;align-items:baseline;gap:4px}.ragw-powered-copy span:first-child{font-weight:600;opacity:.62}.ragw-powered-copy span:last-child{font-weight:900;letter-spacing:.01em}",
       "@media (max-width:520px){#" + root.id + "{left:12px;right:12px;bottom:12px}.ragw-panel{width:calc(100vw - 24px);height:calc(100vh - 92px)}}",
     ].join("");
     document.head.appendChild(style);
@@ -155,6 +158,7 @@
         '<div class="ragw-head"><div class="ragw-brand"><div class="ragw-brand-logo"></div><div class="ragw-title"></div></div><button class="ragw-close" aria-label="Close">x</button></div>' +
         '<div class="ragw-messages"></div>' +
         '<form class="ragw-form"><input class="ragw-input" autocomplete="off" /><button class="ragw-send" type="submit">Send</button></form>' +
+        '<a class="ragw-powered" href="https://ragora.ai" target="_blank" rel="noopener noreferrer" aria-label="Powered by Ragora.ai"><span class="ragw-powered-badge"><span class="ragw-powered-mark">R</span><span class="ragw-powered-copy"><span>Powered by</span><span>Ragora.ai</span></span></span></a>' +
         "</div>" +
         (externalTrigger ? "" : '<button class="ragw-launch" aria-label="Open chat"><span class="ragw-launch-icon"></span><span></span></button>');
 

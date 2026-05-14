@@ -406,7 +406,13 @@ class DatabaseService:
                 "allowed_mime_types": ["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"],
             },
         )
-        if response.status_code not in {200, 201, 409}:
+        duplicate_bucket = (
+            response.status_code == 409
+            or '"statusCode":"409"' in response.text
+            or "already exists" in response.text.lower()
+            or '"Duplicate"' in response.text
+        )
+        if response.status_code not in {200, 201} and not duplicate_bucket:
             try:
                 response.raise_for_status()
             except httpx.HTTPStatusError as exc:

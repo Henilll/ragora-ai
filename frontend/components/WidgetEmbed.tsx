@@ -198,6 +198,13 @@ function WidgetPreview({ form }: { form: WidgetForm }) {
                 {form.input_placeholder || "Ask a question"}
               </div>
             </div>
+            <div className="flex items-center justify-center border-t border-white/10 px-3 pb-2.5 pt-2">
+              <div className="inline-flex min-h-7 items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.07] py-1 pl-1 pr-2.5 text-[11px] leading-none opacity-80 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_10px_28px_rgba(2,6,23,0.14)]">
+                <span className="grid h-5 w-5 place-items-center rounded-full bg-gradient-to-br from-teal-400 via-indigo-500 to-fuchsia-500 text-[11px] font-black text-white shadow-[0_6px_16px_rgba(99,102,241,0.34)]">R</span>
+                <span className="font-semibold opacity-60">Powered by</span>
+                <span className="font-black tracking-normal">Ragora.ai</span>
+              </div>
+            </div>
           </div>
           <div
             className="ml-auto flex items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold shadow-2xl"
