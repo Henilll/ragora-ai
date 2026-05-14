@@ -346,6 +346,8 @@ class DatabaseService:
             "company_site": config.get("company_site", ""),
             "company_email": config.get("company_email", ""),
             "launcher_style": config["launcher_style"],
+            "launcher_circle_size": config.get("launcher_circle_size", 60),
+            "launcher_pill_size": config.get("launcher_pill_size", 56),
             "border_radius": config["border_radius"],
             "launcher_label": config["launcher_label"],
             "input_placeholder": config["input_placeholder"],
@@ -359,22 +361,35 @@ class DatabaseService:
             "is_enabled": config["is_enabled"],
         }
 
-        if existing:
+        async def write_widget(widget_payload: dict) -> dict:
+            if existing:
+                response = await self._request(
+                    "PATCH",
+                    "chat_widgets",
+                    params={"widget_id": f"eq.{existing['widget_id']}"},
+                    json=widget_payload,
+                )
+                return response.json()[0]
+
+            widget_id = f"w_{secrets.token_urlsafe(18).replace('-', '').replace('_', '')[:20]}"
             response = await self._request(
-                "PATCH",
+                "POST",
                 "chat_widgets",
-                params={"widget_id": f"eq.{existing['widget_id']}"},
-                json=payload,
+                json={"widget_id": widget_id, "user_id": config["user_id"], **widget_payload},
             )
             return response.json()[0]
 
-        widget_id = f"w_{secrets.token_urlsafe(18).replace('-', '').replace('_', '')[:20]}"
-        response = await self._request(
-            "POST",
-            "chat_widgets",
-            json={"widget_id": widget_id, "user_id": config["user_id"], **payload},
-        )
-        return response.json()[0]
+        try:
+            return await write_widget(payload)
+        except ExternalServiceError as exc:
+            if "launcher_circle_size" not in exc.detail and "launcher_pill_size" not in exc.detail:
+                raise
+            legacy_payload = {
+                key: value
+                for key, value in payload.items()
+                if key not in {"launcher_circle_size", "launcher_pill_size"}
+            }
+            return await write_widget(legacy_payload)
 
     async def ensure_widget_asset_bucket(self) -> None:
         if self._asset_bucket_ready:

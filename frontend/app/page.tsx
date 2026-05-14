@@ -230,12 +230,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="border-y border-white/10 bg-white/[0.025] px-4 py-8 sm:px-6">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-10 gap-y-4 text-sm font-semibold uppercase text-slate-500">
-          <span className="normal-case text-slate-400">Trusted by ambitious operators at</span>
-          {companies.map((company) => <span key={company}>{company}</span>)}
-        </div>
-      </section>
+
 
       <section id="features" className="mx-auto max-w-7xl px-4 py-24 sm:px-6">
         <div className="mb-12 max-w-2xl">
