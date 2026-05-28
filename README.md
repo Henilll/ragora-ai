@@ -1,5 +1,5 @@
 
-<div align="center">
+<div align="centerr">
 
 <img width="100%" src="https://capsule-render.vercel.app/api?type=waving&color=0:7F5AF0,50:2CB67D,100:00C2FF&height=280&section=header&text=Ragora%20AI&fontSize=60&fontColor=ffffff&animation=fadeIn&fontAlignY=38&desc=Enterprise%20Retrieval-Augmented%20Generation%20Infrastructure&descAlignY=60&descSize=20"/>
 
