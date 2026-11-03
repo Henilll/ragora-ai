@@ -97,15 +97,16 @@ export function FileUpload({ userId, onUploaded }: Props) {
           <>
             <UploadCloud size={18} style={{ color: "var(--text-tertiary)" }} />
             <span style={{ fontSize: "0.75rem", color: "var(--text-tertiary)" }}>
-              Drop PDF or <span style={{ color: "var(--accent-light)" }}>browse</span>
+              Drop PDF, TXT, MD or DOCX, or <span style={{ color: "var(--accent-light)" }}>browse</span>
             </span>
+            <span style={{ fontSize: "0.6875rem", color: "var(--text-tertiary)" }}>Max 20 MB, 200 pages for PDF</span>
           </>
         )}
       </button>
 
-      <input ref={inputRef} type="file" accept="application/pdf" onChange={handleChange} style={{ display: "none" }} />
+      <input ref={inputRef} type="file" accept=".pdf,.txt,.md,.docx,application/pdf,text/plain,text/markdown" onChange={handleChange} style={{ display: "none" }} />
       {error && (
-        <p style={{ marginTop: "0.5rem", fontSize: "0.75rem", color: "var(--danger)" }}>{error}</p>
+        <div className="notice-error" style={{ marginTop: "0.5rem" }} role="alert">{error}</div>
       )}
     </div>
   );

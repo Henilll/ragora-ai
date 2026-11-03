@@ -101,6 +101,9 @@ export function AnalyticsPanel({ analytics }: Props) {
   }
 
   const maxDaily = Math.max(...analytics.daily_messages.map((item) => item.count), 1);
+  const helpful = analytics.feedback_helpful ?? 0;
+  const notHelpful = analytics.feedback_not_helpful ?? 0;
+  const helpfulRate = helpful + notHelpful > 0 ? Math.round((helpful / (helpful + notHelpful)) * 100) : null;
 
   const metricValues: Record<string, string | number> = {
     total_messages: analytics.total_messages,
@@ -109,6 +112,8 @@ export function AnalyticsPanel({ analytics }: Props) {
     unanswered_count: analytics.unanswered_count,
     total_tokens: analytics.total_tokens.toLocaleString(),
     average_latency_ms: `${analytics.average_latency_ms}ms`,
+    feedback_helpful: analytics.feedback_helpful ?? 0,
+    feedback_not_helpful: analytics.feedback_not_helpful ?? 0,
   };
 
   return (
@@ -132,7 +137,7 @@ export function AnalyticsPanel({ analytics }: Props) {
         {/* Bar chart */}
         <div className="card fade-up fade-up-d2" style={{ padding: "1.5rem" }}>
           <div style={{ marginBottom: "1.25rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <p style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-primary)" }}>Daily Questions</p>
+            <p style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-primary)" }}>Daily Questions{helpfulRate !== null ? ` · ${helpfulRate}% helpful votes` : ""}</p>
             <span className="badge">{analytics.daily_messages.length} days</span>
           </div>
           <div style={{ display: "flex", height: 140, alignItems: "flex-end", gap: 6 }}>
@@ -152,7 +157,7 @@ export function AnalyticsPanel({ analytics }: Props) {
                         opacity: 0.85,
                         transition: "opacity 0.15s",
                       }}
-                      title={`${item.date}: ${item.count}`}
+                      title={`${item.date}: ${item.count} questions`}
                     />
                     <span style={{ fontSize: "0.625rem", color: "var(--text-tertiary)", textAlign: "center", width: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {item.date.slice(5)}

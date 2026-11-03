@@ -28,8 +28,8 @@ function AuthCallbackInner() {
 
   return (
     <main className="premium-shell grid min-h-screen place-items-center px-4">
-      <div className="glass flex w-full max-w-sm flex-col items-center rounded-xl p-8 text-center">
-        <Loader2 className="mb-4 h-7 w-7 animate-spin text-violet-200" />
+      <div className="card flex w-full max-w-sm flex-col items-center p-8 text-center">
+        <Loader2 className="mb-4 h-7 w-7 animate-spin text-[#FF6B2C]" />
         <p className="text-sm font-semibold text-white">{message}</p>
       </div>
     </main>
@@ -40,8 +40,8 @@ export default function AuthCallbackPage() {
   return (
     <Suspense fallback={
       <main className="premium-shell grid min-h-screen place-items-center px-4">
-        <div className="glass flex w-full max-w-sm flex-col items-center rounded-xl p-8 text-center">
-          <Loader2 className="mb-4 h-7 w-7 animate-spin text-violet-200" />
+        <div className="card flex w-full max-w-sm flex-col items-center p-8 text-center">
+          <Loader2 className="mb-4 h-7 w-7 animate-spin text-[#FF6B2C]" />
           <p className="text-sm font-semibold text-white">Finishing secure sign in...</p>
         </div>
       </main>

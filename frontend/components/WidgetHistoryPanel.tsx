@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Users, MessageCircle, Circle } from "lucide-react";
 import type { WidgetHistory } from "@/lib/api";
 
@@ -12,10 +13,16 @@ type Props = {
 
 export function WidgetHistoryPanel({ history, onSearch, exportCsvUrl, exportJsonUrl }: Props) {
   const conversations = history?.conversations ?? [];
+  const [query, setQuery] = useState("");
+  useEffect(() => {
+    if (!onSearch) return;
+    const t = setTimeout(() => onSearch(query), 400);
+    return () => clearTimeout(t);
+  }, [query]);
 
   return (
     <section>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap", marginBottom: "1rem" }}>
         <div>
           <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--text-primary)" }}>Live Widget Conversations</p>
           <p style={{ fontSize: "0.75rem", color: "var(--text-tertiary)", marginTop: "0.125rem" }}>
@@ -24,7 +31,7 @@ export function WidgetHistoryPanel({ history, onSearch, exportCsvUrl, exportJson
         </div>
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
           {onSearch && (
-            <input className="inp" style={{ maxWidth: 260 }} placeholder="Search conversations..." onChange={(e) => onSearch(e.target.value)} aria-label="Search widget conversations" />
+            <input className="inp" style={{ maxWidth: 260 }} placeholder="Search conversations..." value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search widget conversations" />
           )}
           {exportCsvUrl && <a className="badge" href={exportCsvUrl} target="_blank" rel="noreferrer">Export CSV</a>}
           {exportJsonUrl && <a className="badge" href={exportJsonUrl} target="_blank" rel="noreferrer">Export JSON</a>}
@@ -32,7 +39,7 @@ export function WidgetHistoryPanel({ history, onSearch, exportCsvUrl, exportJson
         {conversations.length > 0 && (
           <span className="badge-success badge">
             <Circle size={6} style={{ marginRight: 4, fill: "#5EC99A" }} />
-            {conversations.length} active
+            Showing {Math.min(conversations.length, 8)} conversations
           </span>
         )}
       </div>
@@ -50,7 +57,7 @@ export function WidgetHistoryPanel({ history, onSearch, exportCsvUrl, exportJson
           {conversations.slice(0, 8).map((conversation) => (
             <article key={conversation.visitor_id} className="card" style={{ padding: "1.25rem" }}>
               {/* Visitor header */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap", marginBottom: "1rem" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", minWidth: 0 }}>
                   <div
                     style={{

@@ -265,9 +265,57 @@ button, input, textarea, select {
 }
 
 .glass {
+  /* Kept as an alias only: flat card, no blur, no gradient, no glow. */
   background: var(--surface-1);
   border: 1px solid var(--border-default);
   box-shadow: 0 12px 32px rgba(0,0,0,0.28);
+}
+
+/* Form field label, shared so auth, builder and admin read the same. */
+.field-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* Error and success notices: never the same colour, so a failed
+   login can never read as a success message. */
+.notice-error {
+  border: 1px solid rgba(214,69,69,0.35);
+  background: rgba(214,69,69,0.10);
+  color: #f3b8b8;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.notice-success {
+  border: 1px solid rgba(46,158,107,0.35);
+  background: rgba(46,158,107,0.10);
+  color: #a8dcc2;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+/* Native selects: dark options, so a dropdown never opens white-on-white. */
+select.inp option, select.auth-input option {
+  background: var(--surface-0);
+  color: var(--text-primary);
+}
+
+/* Loading skeleton for dashboard stats before analytics arrive. */
+.skeleton {
+  background: var(--surface-2);
+  border-radius: 8px;
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
 }
 
 .hairline {
@@ -282,13 +330,6 @@ button, input, textarea, select {
   animation: floatY 6s ease-in-out infinite;
 }
 
-.mesh-line {
-  background-image:
-    linear-gradient(rgba(255,255,255,0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.045) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: radial-gradient(ellipse at center, black 0%, transparent 72%);
-}
 
 .auth-input {
   width: 100%;

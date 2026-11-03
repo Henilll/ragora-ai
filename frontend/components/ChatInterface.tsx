@@ -118,9 +118,9 @@ export function ChatInterface({ userId, messages, documents, onMessagesChange, o
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              className="glass rounded-xl p-6 text-center sm:p-8"
+              className="card rounded-xl p-6 text-center sm:p-8"
             >
-              <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-xl bg-white text-slate-950 shadow-[0_0_50px_rgba(196,181,253,0.25)]">
+              <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-xl bg-white text-slate-950">
                 <Sparkles size={20} />
               </div>
               <p className="text-lg font-semibold text-white">Test your knowledge assistant</p>
@@ -195,7 +195,7 @@ export function ChatInterface({ userId, messages, documents, onMessagesChange, o
                       ? {
                           background: "var(--accent)",
                           color: "#fff",
-                          boxShadow: "0 4px 14px var(--accent-glow)",
+                          boxShadow: "none",
                         }
                       : {
                           background: "var(--surface-2)",
@@ -255,7 +255,7 @@ export function ChatInterface({ userId, messages, documents, onMessagesChange, o
               }
             }}
             rows={1}
-            placeholder="Ask a question from your documents…"
+            placeholder="Ask a question from your documents… (Enter to send, Shift+Enter for a new line)"
             className="inp"
             style={{
               flex: 1,
@@ -279,9 +279,9 @@ export function ChatInterface({ userId, messages, documents, onMessagesChange, o
           </button>
         </form>
         {error && (
-          <p style={{ maxWidth: 720, margin: "0.5rem auto 0", fontSize: "0.75rem", color: "var(--danger)" }}>
+          <div className="notice-error" style={{ maxWidth: 820, margin: "0.5rem auto 0" }} role="alert">
             {error}
-          </p>
+          </div>
         )}
       </div>
     </section>

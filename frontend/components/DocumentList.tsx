@@ -1,6 +1,13 @@
 "use client";
 
-import { FileText, Trash2 } from "lucide-react";
+import { FileText, FileCode2, File, Trash2 } from "lucide-react";
+
+function fileIcon(name: string) {
+  const ext = name.split(".").pop()?.toLowerCase();
+  if (ext === "md") return FileCode2;
+  if (ext === "txt" || ext === "docx") return File;
+  return FileText;
+}
 import type { DocumentItem } from "@/lib/api";
 
 type Props = {
@@ -15,7 +22,7 @@ export function DocumentList({ documents, onDelete }: Props) {
     <div style={{ marginTop: "0.75rem" }}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <p style={{ fontSize: "0.6875rem", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-          Uploaded PDFs
+          Sources
         </p>
         {documents.length > 0 && (
           <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-slate-300">
@@ -25,7 +32,7 @@ export function DocumentList({ documents, onDelete }: Props) {
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
         {documents.length === 0 ? (
-          <p style={{ fontSize: "0.8125rem", color: "var(--text-tertiary)", padding: "0.5rem 0" }}>No documents yet.</p>
+          <p style={{ fontSize: "0.8125rem", color: "var(--text-tertiary)", padding: "0.5rem 0" }}>No sources yet. Upload a PDF, TXT, Markdown or DOCX file.</p>
         ) : (
           documents.map((document) => (
             <div
@@ -38,14 +45,14 @@ export function DocumentList({ documents, onDelete }: Props) {
                   width: 28,
                   height: 28,
                   borderRadius: 6,
-                  background: "rgba(99,102,241,0.1)",
-                  border: "1px solid rgba(99,102,241,0.2)",
+                  background: "var(--accent-dim)",
+                  border: "1px solid rgba(232,73,15,0.25)",
                   display: "grid",
                   placeItems: "center",
                   flexShrink: 0,
                 }}
               >
-                <FileText size={13} style={{ color: "var(--accent-light)" }} />
+                {(() => { const Icon = fileIcon(document.file_name); return <Icon size={13} style={{ color: "var(--accent-light)" }} />; })()}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p
@@ -78,7 +85,7 @@ export function DocumentList({ documents, onDelete }: Props) {
               </div>
               <button
                 type="button"
-                onClick={() => onDelete(document.id)}
+                onClick={() => { if (window.confirm(`Delete "${document.file_name}"? It will stop answering from this source.`)) void onDelete(document.id); }}
                 aria-label={`Delete ${document.file_name}`}
                 style={{
                   width: 28,

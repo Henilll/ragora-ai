@@ -292,7 +292,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section id="how" className="border-y border-white/10 bg-[#12151A] px-4 py-20 sm:px-6">
+      <section id="how" style={{ scrollMarginTop: 84 }} className="border-y border-white/10 bg-[#12151A] px-4 py-20 sm:px-6">
         <div className="mx-auto max-w-7xl">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-[#76716A]">How it works</p>
           <h2 className="max-w-2xl text-4xl font-semibold tracking-tight sm:text-5xl">Three steps, no code, no fake demo.</h2>
@@ -308,7 +308,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section id="features" className="mx-auto max-w-7xl px-4 py-24 sm:px-6">
+      <section id="features" style={{ scrollMarginTop: 84 }} className="mx-auto max-w-7xl px-4 py-24 sm:px-6">
         <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-[#76716A]">Features</p>
         <h2 className="max-w-2xl text-4xl font-semibold tracking-tight sm:text-5xl">Built for answers you can trust, and questions you can fix.</h2>
         <div className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -366,7 +366,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section id="pricing" className="mx-auto max-w-7xl px-4 py-24 sm:px-6">
+      <section id="pricing" style={{ scrollMarginTop: 84 }} className="mx-auto max-w-7xl px-4 py-24 sm:px-6">
         <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-[#76716A]">Pricing</p>
         <h2 className="max-w-2xl text-4xl font-semibold tracking-tight sm:text-5xl">Start free. Pay for volume when you need it.</h2>
         <p className="mt-4 max-w-xl text-[#B0ABA0]">Growth and Business pricing is set with the workspace owner, not invented on this page. Contact us for a quote for your traffic and limits.</p>
@@ -408,7 +408,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section id="faq" className="mx-auto max-w-3xl px-4 py-24 sm:px-6">
+      <section id="faq" style={{ scrollMarginTop: 84 }} className="mx-auto max-w-3xl px-4 py-24 sm:px-6">
         <h2 className="mb-8 text-center text-4xl font-semibold tracking-tight">Questions, answered honestly.</h2>
         <div className="space-y-3">
           {faqs.map(([question, answer], index) => (

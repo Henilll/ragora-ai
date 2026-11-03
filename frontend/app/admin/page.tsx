@@ -67,9 +67,7 @@ function Metric({
         <div className="grid h-9 w-9 place-items-center rounded-lg bg-white text-slate-950">
           <Icon size={17} />
         </div>
-        <span className="rounded-full border border-teal-300/20 bg-teal-300/10 px-2.5 py-1 text-[11px] font-semibold text-teal-100">
-          Live
-        </span>
+        <span className="badge-success badge">Live data</span>
       </div>
       <p className="text-2xl font-semibold text-white">{value}</p>
       <p className="mt-1 text-xs font-semibold uppercase tracking-[0.04em] text-slate-500">{label}</p>
@@ -143,13 +141,13 @@ export default function AdminPage() {
   }
 
   async function removeKey(key: AdminApiKey) {
+    if (!window.confirm(`Delete the "${key.name}" key? The backend will fall back to its environment key.`)) return;
     await deleteAdminApiKey(key.id);
     await refresh();
   }
 
   return (
     <main className="premium-shell min-h-screen px-4 py-6 sm:px-6">
-      <div aria-hidden className="mesh-line pointer-events-none fixed inset-0 opacity-30" />
       <div className="relative mx-auto max-w-7xl">
         <header className="mb-6 flex flex-col justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.045] p-4 backdrop-blur-xl sm:flex-row sm:items-center">
           <div className="flex items-center gap-3">
@@ -173,7 +171,7 @@ export default function AdminPage() {
               <RefreshCw size={15} />
               Refresh
             </button>
-            <Link href="/dashboard" className="inline-flex h-10 items-center gap-2 rounded-lg bg-white px-4 text-sm font-semibold text-slate-950 hover:bg-violet-100">
+            <Link href="/dashboard" className="btn-accent inline-flex h-10 items-center gap-2 px-4">
               <ArrowLeft size={15} />
               Dashboard
             </Link>
@@ -188,7 +186,7 @@ export default function AdminPage() {
 
         {loading ? (
           <div className="grid min-h-[50vh] place-items-center">
-            <Loader2 className="h-8 w-8 animate-spin text-violet-200" />
+            <Loader2 className="h-8 w-8 animate-spin text-[#FF6B2C]" />
           </div>
         ) : (
           <div className="space-y-6">
@@ -206,7 +204,7 @@ export default function AdminPage() {
             </section>
 
             <section className="grid gap-5 xl:grid-cols-[380px_1fr]">
-              <form onSubmit={handleCreate} className="glass h-fit rounded-xl p-5">
+              <form onSubmit={handleCreate} className="card h-fit p-5">
                 <div className="mb-5 flex items-center gap-3">
                   <div className="grid h-9 w-9 place-items-center rounded-lg bg-white text-slate-950">
                     <Plus size={17} />
@@ -225,13 +223,13 @@ export default function AdminPage() {
                   <input className="auth-input" value={form.key_value} onChange={(event) => setForm({ ...form, key_value: event.target.value })} placeholder="Paste API key" required />
                   <label className="block">
                     <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.04em] text-slate-500">Rotation weight: {form.weight}</span>
-                    <input type="range" min={1} max={20} value={form.weight} onChange={(event) => setForm({ ...form, weight: Number(event.target.value) })} className="w-full accent-violet-300" />
+                    <input type="range" min={1} max={20} value={form.weight} onChange={(event) => setForm({ ...form, weight: Number(event.target.value) })} className="w-full" style={{ accentColor: "var(--accent)" }} />
                   </label>
                   <label className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-3 py-2 text-sm text-slate-300">
-                    <input type="checkbox" checked={form.is_enabled} onChange={(event) => setForm({ ...form, is_enabled: event.target.checked })} className="accent-violet-300" />
+                    <input type="checkbox" checked={form.is_enabled} onChange={(event) => setForm({ ...form, is_enabled: event.target.checked })} style={{ accentColor: "var(--accent)" }} />
                     Enable immediately
                   </label>
-                  <button disabled={saving} className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-white font-semibold text-slate-950 hover:bg-violet-100 disabled:opacity-60">
+                  <button disabled={saving} className="btn-accent flex h-11 w-full items-center justify-center gap-2 disabled:opacity-60">
                     {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound size={16} />}
                     Save key
                   </button>
@@ -263,7 +261,7 @@ export default function AdminPage() {
                             <div className="min-w-0">
                               <div className="mb-2 flex flex-wrap items-center gap-2">
                                 <p className="font-semibold text-white">{key.name}</p>
-                                <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${key.is_enabled ? "border border-teal-300/20 bg-teal-300/10 text-teal-100" : "border border-white/10 bg-white/5 text-slate-500"}`}>
+                                <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${key.is_enabled ? "badge-success badge" : "badge"}`}>
                                   {key.is_enabled ? "Enabled" : "Disabled"}
                                 </span>
                               </div>
@@ -299,7 +297,7 @@ export default function AdminPage() {
             <section className="rounded-xl border border-white/10 bg-white/[0.035] p-5">
               <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-violet-200" />
+                  <Sparkles className="h-4 w-4 text-[#FF6B2C]" />
                   <div>
                     <p className="font-semibold text-white">Supabase Auth users</p>
                     <p className="text-xs text-slate-500">Users are listed from Authentication and enriched with workspace data when available.</p>
@@ -307,8 +305,8 @@ export default function AdminPage() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <span className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-300">{users.length} auth users</span>
-                  <span className="rounded-lg border border-teal-300/20 bg-teal-300/10 px-3 py-1.5 text-xs text-teal-100">{users.filter((user) => user.email_verified).length} verified</span>
-                  <span className="rounded-lg border border-violet-300/20 bg-violet-300/10 px-3 py-1.5 text-xs text-violet-100">{users.filter((user) => user.is_admin).length} admins</span>
+                  <span className="badge-success badge px-3 py-1.5 text-xs">{users.filter((user) => user.email_verified).length} verified</span>
+                  <span className="badge-accent badge px-3 py-1.5 text-xs">{users.filter((user) => user.is_admin).length} admins</span>
                 </div>
               </div>
               <div className="overflow-x-auto">
@@ -333,8 +331,8 @@ export default function AdminPage() {
                         </td>
                         <td className="py-3 text-slate-300">{user.workspace}</td>
                         <td className="py-3 capitalize text-slate-400">{user.provider}</td>
-                        <td className="py-3">{user.email_verified ? <CheckCircle2 className="h-4 w-4 text-teal-300" /> : <span className="text-slate-600">No</span>}</td>
-                        <td className="py-3">{user.is_admin ? <ShieldCheck className="h-4 w-4 text-violet-200" /> : <span className="text-slate-600">No</span>}</td>
+                        <td className="py-3">{user.email_verified ? <CheckCircle2 className="h-4 w-4 text-[#5EC99A]" /> : <span className="text-slate-600">No</span>}</td>
+                        <td className="py-3">{user.is_admin ? <ShieldCheck className="h-4 w-4 text-[#FF6B2C]" /> : <span className="text-slate-600">No</span>}</td>
                         <td className="py-3 text-slate-400">{user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString() : "Never"}</td>
                         <td className="py-3"><span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-slate-300">{user.source || "auth"}</span></td>
                       </tr>
@@ -342,6 +340,7 @@ export default function AdminPage() {
                   </tbody>
                 </table>
               </div>
+              {users.length > 12 && <p className="mt-3 text-xs text-slate-500">Showing the first 12 of {users.length} users.</p>}
             </section>
           </div>
         )}

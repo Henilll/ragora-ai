@@ -572,7 +572,7 @@ export function WidgetEmbed({ userId }: Props) {
         </label>
       </div>
 
-      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
         {/* Templates */}
         <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">

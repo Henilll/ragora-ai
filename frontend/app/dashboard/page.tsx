@@ -5,24 +5,22 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import {
-  Activity,
   BarChart3,
   Bot,
-  ChevronRight,
-  Command,
+  CheckCircle2,
+  ChevronDown,
+  CircleAlert,
   FileStack,
   LogOut,
   MessageCircle,
   Rocket,
   ShieldCheck,
-  Sparkles,
-  Zap,
+  UploadCloud,
 } from "lucide-react";
 import { AnalyticsPanel } from "@/components/AnalyticsPanel";
 import { ChatInterface } from "@/components/ChatInterface";
 import { DocumentList } from "@/components/DocumentList";
 import { FileUpload } from "@/components/FileUpload";
-// import { HistorySidebar } from "@/components/HistorySidebar";
 import { WidgetEmbed } from "@/components/WidgetEmbed";
 import { WidgetHistoryPanel } from "@/components/WidgetHistoryPanel";
 import type { ChatMessage, DocumentItem, WidgetAnalytics, WidgetHistory } from "@/lib/api";
@@ -32,9 +30,9 @@ import { clearSession, getSession } from "@/lib/auth";
 type View = "overview" | "builder" | "playground";
 
 const NAV_ITEMS: { id: View; label: string; icon: typeof BarChart3; description: string }[] = [
-  { id: "overview", label: "Overview", icon: BarChart3, description: "Analytics, coverage, and live demand" },
-  { id: "builder", label: "Builder", icon: Bot, description: "Design and deploy your chatbot" },
-  { id: "playground", label: "Playground", icon: MessageCircle, description: "Test answer quality against sources" },
+  { id: "overview", label: "Overview", icon: BarChart3, description: "Numbers, gaps, and live visitor conversations" },
+  { id: "builder", label: "Builder", icon: Bot, description: "Design, preview, and publish your widget" },
+  { id: "playground", label: "Playground", icon: MessageCircle, description: "Test answers against your own documents" },
 ];
 
 const viewMotion = {
@@ -43,36 +41,18 @@ const viewMotion = {
   exit: { opacity: 0, y: -6 },
 };
 
-function InsightCard({
-  icon: Icon,
-  label,
-  value,
-  tone,
-  detail,
-}: {
-  icon: typeof Activity;
-  label: string;
-  value: string | number;
-  tone: string;
-  detail: string;
-}) {
+function StatCard({ icon: Icon, label, value, detail }: { icon: typeof BarChart3; label: string; value: string | number; detail: string }) {
   return (
-    <motion.div
-      whileHover={{ y: -4, scale: 1.01 }}
-      transition={{ type: "spring", stiffness: 260, damping: 22 }}
-      className="relative overflow-hidden rounded-xl border border-white/10 bg-[#171B21] p-4 shadow-[0_12px_32px_rgba(0,0,0,0.28)]"
-    >
-      <div className="absolute inset-y-4 left-0 w-[3px] rounded-full" style={{ background: tone }} />
-      <div className="mb-4 flex items-center justify-between">
-        <div className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.07]">
-          <Icon size={17} className="text-white" />
+    <div className="card p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.06]">
+          <Icon size={16} style={{ color: "var(--accent-light)" }} />
         </div>
-        <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] font-medium text-slate-400">Live</span>
       </div>
       <p className="text-2xl font-semibold tracking-tight text-white">{value}</p>
       <p className="mt-1 text-xs font-semibold uppercase tracking-[0.04em] text-slate-500">{label}</p>
-      <p className="mt-3 text-xs leading-5 text-slate-400">{detail}</p>
-    </motion.div>
+      <p className="mt-2 text-xs leading-5 text-slate-400">{detail}</p>
+    </div>
   );
 }
 
@@ -86,6 +66,8 @@ export default function DashboardPage() {
   const [activeView, setActiveView] = useState<View>("overview");
   const [isReady, setIsReady] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showSources, setShowSources] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const currentView = NAV_ITEMS.find((n) => n.id === activeView) ?? NAV_ITEMS[0];
 
   useEffect(() => {
@@ -111,6 +93,8 @@ export default function DashboardPage() {
     if (docs.status === "fulfilled") setDocuments(docs.value);
     if (stats.status === "fulfilled") setAnalytics(stats.value);
     if (wh.status === "fulfilled") setWidgetHistory(wh.value);
+    const failed = [history, docs, stats, wh].filter((r) => r.status === "rejected");
+    setLoadError(failed.length > 0 ? "Some dashboard data did not load. Your documents and settings are unchanged - try Refresh below." : null);
   }
 
   async function handleHistorySearch(query: string) {
@@ -130,129 +114,107 @@ export default function DashboardPage() {
     router.replace("/login");
   }
 
-  if (!isReady || !userId) return <div className="premium-shell min-h-screen" />;
+  if (!isReady || !userId) {
+    return (
+      <div className="premium-shell grid min-h-screen place-items-center px-4">
+        <div className="w-full max-w-sm space-y-3">
+          <div className="skeleton h-10 w-full" />
+          <div className="skeleton h-40 w-full" />
+          <p className="text-center text-sm text-slate-500">Loading your workspace…</p>
+        </div>
+      </div>
+    );
+  }
+
+  const readyDocs = documents.filter((d) => (d.status ?? "ready") === "ready").length;
+  const processingDocs = documents.filter((d) => d.status === "processing").length;
+  const failedDocs = documents.filter((d) => d.status === "failed").length;
+  const initials = userId.slice(0, 2).toUpperCase();
+
+  const navButtons = NAV_ITEMS.map((item) => {
+    const Icon = item.icon;
+    const active = activeView === item.id;
+    return (
+      <button
+        key={item.id}
+        type="button"
+        onClick={() => setActiveView(item.id)}
+        aria-current={active ? "page" : undefined}
+        className={`nav-item ${active ? "active" : ""}`}
+      >
+        <Icon size={15} />
+        <span className="flex-1">
+          <span className="block">{item.label}</span>
+          <span className="mt-0.5 hidden text-[11px] font-normal leading-4 text-slate-500 xl:block">{item.description}</span>
+        </span>
+      </button>
+    );
+  });
+
+  const sourcesBlock = (
+    <div className="flex flex-col gap-3">
+      <FileUpload userId={userId} onUploaded={() => refreshAll(userId)} />
+      <DocumentList documents={documents} onDelete={handleDeleteDocument} />
+    </div>
+  );
 
   return (
-    <div className="premium-shell" style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
-
-      {/* ── Left rail: Chat history (lg+) ── */}
-      {/* <HistorySidebar messages={messages} /> */}
-
-      {/* ── Document sidebar (xl+) ── */}
-      <div
-        className="hidden xl:flex"
-        style={{
-          width: 272,
-          flexShrink: 0,
-          flexDirection: "column",
-          borderRight: "1px solid rgba(255,255,255,0.10)",
-          background: "#0C0E11",
-          padding: "1.25rem 1rem",
-          gap: "0",
-          overflowY: "auto",
-          height: "100vh",
-        }}
-      >
-        {/* Workspace header */}
-        <div style={{ marginBottom: "1.5rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", marginBottom: "0.375rem" }}>
-            <div style={{ width: 36, height: 36, borderRadius: 8, background: "#E8490F", color: "#fff", display: "grid", placeItems: "center" }}>
-              <Sparkles size={16} />
-            </div>
-            <div style={{ minWidth: 0 }}>
-              <p style={{ fontSize: "0.875rem", fontWeight: 800, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                Ragora
-              </p>
-              <p style={{ fontSize: "0.6875rem", color: "var(--text-secondary)" }}>{userId}</p>
-            </div>
+    <div className="premium-shell flex h-screen overflow-hidden">
+      {/* Sidebar: from lg up, so a laptop sees sources without scrolling past content. */}
+      <aside className="hidden w-[280px] shrink-0 flex-col overflow-y-auto border-r border-white/10 bg-[#0C0E11] px-4 py-5 lg:flex">
+        <div className="mb-6 flex items-center gap-2.5">
+          <div className="grid h-9 w-9 place-items-center rounded-lg bg-white text-sm font-bold text-[#0C0E11]">
+            H<span style={{ color: "#E8490F" }}>.</span>
           </div>
-        </div>
-
-        {/* Nav */}
-        <div style={{ marginBottom: "1.5rem" }}>
-          <p style={{ fontSize: "0.6875rem", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.5rem", paddingLeft: "0.25rem" }}>
-            Console
-          </p>
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const active = activeView === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setActiveView(item.id)}
-                className="group relative flex w-full items-center gap-3 overflow-hidden rounded-lg px-3 py-2.5 text-left text-sm font-medium transition"
-                style={active ? { background: "rgba(232,73,15,0.12)", color: "#FF6B2C", marginBottom: "0.25rem" } : { color: "var(--text-secondary)", marginBottom: "0.25rem" }}
-              >
-                {active && <motion.span layoutId="dashboard-nav-active" className="absolute inset-y-1 left-1 w-1 rounded-full" style={{ background: "#E8490F" }} />}
-                <Icon size={15} />
-                <span className="flex-1">
-                  <span className="block">{item.label}</span>
-                  <span className="mt-0.5 hidden text-[11px] font-normal leading-4 text-slate-500 2xl:block">{item.description}</span>
-                </span>
-                {active && <ChevronRight size={12} style={{ marginLeft: "auto", opacity: 0.6 }} />}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="rounded-lg border border-white/10 bg-white/[0.04] p-3" style={{ marginBottom: "1.25rem" }}>
-          <div className="mb-2 flex items-center gap-2 text-xs font-semibold" style={{ color: "#5EC99A" }}>
-            <ShieldCheck size={14} />
-            Auth secured
-          </div>
-          <p className="text-xs leading-5 text-slate-400">JWT access tokens and rotated refresh sessions protect this workspace.</p>
-        </div>
-
-        {/* Documents */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          <FileUpload userId={userId} onUploaded={() => refreshAll(userId)} />
-          <DocumentList documents={documents} onDelete={handleDeleteDocument} />
-        </div>
-
-        {/* Logout */}
-        <div className="divider" style={{ margin: "1rem 0 0.875rem" }} />
-        <button
-          type="button"
-          onClick={logout}
-          className="nav-item"
-          style={{ color: "var(--text-tertiary)" }}
-        >
-          <LogOut size={14} />
-          Sign out
-        </button>
-      </div>
-
-      {/* ── Main content ── */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
-
-        {/* Top bar */}
-        <header
-          className="relative z-10 border-b border-white/10 bg-[#0C0E11] px-4 sm:px-6"
-          style={{ height: 68, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}
-        >
-          {/* Breadcrumb */}
           <div className="min-w-0">
-            <div className="mb-1 flex items-center gap-1.5 text-xs text-slate-500">
-              <Command size={13} />
-              <span>Ragora Console</span>
-              <ChevronRight size={12} />
-              <span className="font-semibold text-slate-300">{currentView.label}</span>
-            </div>
-            <p className="hidden truncate text-sm text-slate-400 md:block">{currentView.description}</p>
+            <p className="truncate text-sm font-bold text-white">Ragora</p>
+            <p className="truncate text-xs text-slate-500" title={userId}>{userId}</p>
           </div>
+        </div>
 
-          {/* Tab switcher (mobile/tablet, always visible) */}
-          <div
-            style={{
-              display: "flex",
-              background: "rgba(255,255,255,0.055)",
-              border: "1px solid rgba(255,255,255,0.10)",
-              borderRadius: 10,
-              padding: "3px",
-              gap: 2,
-            }}
-          >
+        <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500">Console</p>
+        <nav className="mb-6 flex flex-col gap-0.5" aria-label="Dashboard sections">{navButtons}</nav>
+
+        {isAdmin && (
+          <Link href="/admin" className="btn-ghost mb-6 flex h-10 items-center justify-center gap-2 font-semibold text-slate-200">
+            <ShieldCheck size={15} />
+            Admin panel
+          </Link>
+        )}
+
+        <div className="flex-1">{sourcesBlock}</div>
+
+        <div className="mt-6 border-t border-white/10 pt-4">
+          <button type="button" onClick={logout} className="nav-item">
+            <LogOut size={14} />
+            Sign out
+          </button>
+        </div>
+      </aside>
+
+      {/* Main */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Mobile header */}
+        <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-[#0C0E11] px-4 lg:hidden">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white text-xs font-bold text-[#0C0E11]">
+              H<span style={{ color: "#E8490F" }}>.</span>
+            </div>
+            <p className="truncate text-sm font-bold text-white">Ragora</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Link href="/admin" className="rounded-lg border border-[#E8490F]/30 bg-[#E8490F]/10 px-3 py-1.5 text-xs font-semibold text-[#FF6B2C]">Admin</Link>
+            )}
+            <button type="button" onClick={logout} className="btn-ghost grid h-9 w-9 place-items-center p-0" aria-label="Log out">
+              <LogOut size={14} />
+            </button>
+          </div>
+        </header>
+
+        {/* Mobile tabs + sources, one place, not repeated in every view */}
+        <div className="shrink-0 border-b border-white/10 bg-[#0C0E11] px-4 py-3 lg:hidden">
+          <div className="flex gap-1 rounded-lg border border-white/10 bg-white/[0.04] p-1" role="tablist" aria-label="Dashboard sections">
             {NAV_ITEMS.map((item) => {
               const Icon = item.icon;
               const active = activeView === item.id;
@@ -260,211 +222,152 @@ export default function DashboardPage() {
                 <button
                   key={item.id}
                   type="button"
+                  role="tab"
+                  aria-selected={active}
                   onClick={() => setActiveView(item.id)}
-                  style={{
-                    height: 32,
-                    padding: "0 0.75rem",
-                    borderRadius: 7,
-                    border: "none",
-                    background: active ? "#ffffff" : "transparent",
-                    color: active ? "#07080d" : "var(--text-secondary)",
-                    fontSize: "0.8125rem",
-                    fontWeight: active ? 600 : 500,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.375rem",
-                    transition: "background 0.15s, color 0.15s",
-                    boxShadow: active ? "0 12px 34px rgba(255,255,255,0.12)" : "none",
-                  }}
+                  className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md text-xs font-semibold"
+                  style={{ background: active ? "#fff" : "transparent", color: active ? "#0C0E11" : "var(--text-secondary)" }}
                 >
                   <Icon size={13} />
-                  <span className="hidden sm:inline">{item.label}</span>
+                  {item.label}
                 </button>
               );
             })}
           </div>
+          <button
+            type="button"
+            onClick={() => setShowSources((v) => !v)}
+            aria-expanded={showSources}
+            className="mt-3 flex w-full items-center justify-between rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2.5 text-left text-sm font-semibold text-slate-200"
+          >
+            <span className="flex items-center gap-2">
+              <UploadCloud size={15} />
+              Sources: {readyDocs} ready{processingDocs > 0 ? `, ${processingDocs} processing` : ""}{failedDocs > 0 ? `, ${failedDocs} failed` : ""}
+            </span>
+            <ChevronDown size={15} style={{ transform: showSources ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+          </button>
+          {showSources && <div className="mt-3">{sourcesBlock}</div>}
+        </div>
 
-          {/* User badge */}
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <div
-              className="hidden md:flex"
-              style={{ alignItems: "center", gap: "0.5rem" }}
-            >
-              {isAdmin && (
-                <Link href="/admin" className="rounded-lg border border-[#E8490F]/30 bg-[#E8490F]/10 px-3 py-1.5 text-xs font-semibold text-[#FF6B2C] hover:bg-[#E8490F]/15">
-                  Admin
-                </Link>
-              )}
-              <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-slate-300">Secure</span>
-              <div
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 8,
-                  background: "var(--surface-3)",
-                  border: "1px solid var(--border-default)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "0.6875rem",
-                  fontWeight: 700,
-                  color: "var(--accent-light)",
-                }}
-              >
-                {userId.slice(0, 2).toUpperCase()}
-              </div>
-              <p style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", fontWeight: 500 }}>{userId}</p>
-            </div>
-            <button
-              type="button"
-              onClick={logout}
-              className="btn-ghost"
-              style={{ height: 32, width: 32, padding: 0, display: "grid", placeItems: "center" }}
-              aria-label="Log out"
-            >
-              <LogOut size={14} />
-            </button>
+        {/* Desktop top bar */}
+        <header className="hidden h-[68px] shrink-0 items-center justify-between gap-4 border-b border-white/10 bg-[#0C0E11] px-6 lg:flex">
+          <div className="min-w-0">
+            <p className="truncate text-sm text-slate-400">
+              <span className="text-slate-500">Ragora Console / </span>
+              <span className="font-semibold text-slate-200">{currentView.label}</span>
+            </p>
+            <p className="truncate text-xs text-slate-500">{currentView.description}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={() => refreshAll(userId)} className="btn-ghost h-9 px-3 font-semibold">Refresh</button>
+            <span className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-slate-300">
+              <span className="grid h-6 w-6 place-items-center rounded-md bg-white/[0.07] text-[10px] font-bold text-[#FF6B2C]">{initials}</span>
+              {userId}
+            </span>
           </div>
         </header>
 
         {/* Page content */}
-        <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+        <div className="min-h-0 flex-1 overflow-y-auto">
           <AnimatePresence mode="wait">
-          {/* Overview */}
-          {activeView === "overview" && (
-            <motion.div
-              key="overview"
-              {...viewMotion}
-              transition={{ duration: 0.28, ease: "easeOut" }}
-              style={{ padding: "1.5rem" }}
-            >
-              {/* Mobile-only: upload/docs */}
-              <div className="xl:hidden" style={{ marginBottom: "1.25rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                <div className="card" style={{ padding: "1.125rem" }}>
-                  <FileUpload userId={userId} onUploaded={() => refreshAll(userId)} />
-                  <DocumentList documents={documents} onDelete={handleDeleteDocument} />
-                </div>
-              </div>
+            {activeView === "overview" && (
+              <motion.div key="overview" {...viewMotion} transition={{ duration: 0.28, ease: "easeOut" }} className="p-4 sm:p-6">
+                <div className="flex flex-col gap-6">
+                  {loadError && <div className="notice-error" role="alert">{loadError}</div>}
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.985 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.34, ease: "easeOut" }}
-                  className="relative overflow-hidden rounded-xl border border-white/10 bg-[#171B21] p-5 sm:p-6"
-                >
-                  <div aria-hidden className="absolute inset-y-5 left-0 w-[3px] rounded-full" style={{ background: "#E8490F" }} />
-                  <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
-                    <div>
-                      <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-300">
-                        <Zap size={13} />
-                        Live knowledge operations
-                      </div>
-                      <p className="rag3-eyebrow mb-2">Ragora console</p>
-                      <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-4xl">Your AI knowledge command center</h1>
-                      <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-                        Ragora is watching source coverage, customer questions, answer gaps, and widget readiness for <span className="font-semibold text-slate-200">{userId}</span>.
-                      </p>
-                      <div className="mt-5 flex flex-wrap gap-2">
-                        <button type="button" onClick={() => setActiveView("builder")} className="inline-flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-semibold text-white transition" style={{ background: "#E8490F" }}>
-                          <Rocket size={15} />
-                          Deploy widget
-                        </button>
-                        <button type="button" onClick={() => setActiveView("playground")} className="inline-flex h-10 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.055] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.085]">
-                          <MessageCircle size={15} />
-                          Test answers
-                        </button>
-                      </div>
+                  <section className="card p-5 sm:p-6">
+                    <p className="rag3-eyebrow mb-2">Ragora console</p>
+                    <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Your knowledge, in one place</h1>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+                      Upload sources, test answers, then publish the widget. The numbers below are
+                      your real workspace numbers, not demo totals.
+                    </p>
+                    <div className="mt-5 flex flex-wrap gap-2">
+                      <button type="button" onClick={() => setActiveView("builder")} className="btn-accent inline-flex h-10 items-center gap-2 px-4">
+                        <Rocket size={15} />
+                        Open builder
+                      </button>
+                      <button type="button" onClick={() => setActiveView("playground")} className="btn-ghost inline-flex h-10 items-center gap-2 px-4 font-semibold text-white">
+                        <MessageCircle size={15} />
+                        Test answers
+                      </button>
                     </div>
-                    <div className="grid min-w-full grid-cols-3 gap-2 text-center sm:min-w-[360px]">
-                      <div className="rounded-lg border border-white/10 bg-[#12151A] px-4 py-3">
-                        <p className="text-xl font-semibold text-white">{documents.length}</p>
-                        <p className="text-[11px] text-slate-500">Sources</p>
-                      </div>
-                      <div className="rounded-lg border border-white/10 bg-[#12151A] px-4 py-3">
-                        <p className="text-xl font-semibold text-white">{analytics?.unique_visitors ?? 0}</p>
-                        <p className="text-[11px] text-slate-500">Visitors</p>
-                      </div>
-                      <div className="rounded-lg border border-white/10 bg-[#12151A] px-4 py-3">
-                        <p className="text-xl font-semibold text-white">{analytics?.average_latency_ms ?? 0}ms</p>
-                        <p className="text-[11px] text-slate-500">Latency</p>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-                <div className="grid gap-3 lg:grid-cols-3">
-                  <InsightCard icon={FileStack} label="Knowledge coverage" value={`${documents.length} files`} tone="#E8490F" detail="Add more source documents to improve answer depth and reduce unknowns." />
-                  <InsightCard icon={Activity} label="Answer demand" value={analytics?.user_messages ?? 0} tone="#2E9E6B" detail="Customer and tester questions collected from your embedded assistant." />
-                  <InsightCard icon={ShieldCheck} label="Trust layer" value="JWT" tone="#D97706" detail="Workspace APIs are protected with bearer tokens and server-side ownership checks." />
+                  </section>
+
+                  {/* Next steps: only real, checkable steps, no fake progress. */}
+                  <section className="card p-5" aria-label="Next steps">
+                    <h2 className="text-sm font-semibold text-white">Next steps</h2>
+                    <ul className="mt-4 grid gap-3 sm:grid-cols-3">
+                      <li className="flex items-start gap-2.5 text-sm">
+                        {documents.length > 0 ? <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-[#5EC99A]" /> : <FileStack size={17} className="mt-0.5 shrink-0 text-slate-500" />}
+                        <span className="leading-5 text-slate-300">
+                          <strong className="text-white">Upload a source</strong><br />
+                          {documents.length > 0 ? `${readyDocs} of ${documents.length} ready.` : "No documents yet. Upload from the sidebar."}
+                        </span>
+                      </li>
+                      <li className="flex items-start gap-2.5 text-sm">
+                        {messages.length > 0 ? <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-[#5EC99A]" /> : <MessageCircle size={17} className="mt-0.5 shrink-0 text-slate-500" />}
+                        <span className="leading-5 text-slate-300">
+                          <strong className="text-white">Test in playground</strong><br />
+                          {messages.length > 0 ? "Playground history exists." : "Ask a question and check the answer."}
+                        </span>
+                      </li>
+                      <li className="flex items-start gap-2.5 text-sm">
+                        <Bot size={17} className="mt-0.5 shrink-0 text-slate-500" />
+                        <span className="leading-5 text-slate-300">
+                          <strong className="text-white">Publish the widget</strong><br />
+                          Copy the embed code from Builder and paste it on your site.
+                        </span>
+                      </li>
+                    </ul>
+                  </section>
+
+                  <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Workspace numbers">
+                    <StatCard icon={FileStack} label="Sources" value={`${readyDocs} / ${documents.length}`} detail={processingDocs > 0 ? `${processingDocs} still processing.` : failedDocs > 0 ? `${failedDocs} failed - re-upload those files.` : "Ready sources answer widget questions."} />
+                    <StatCard icon={MessageCircle} label="Visitor questions" value={analytics?.user_messages ?? 0} detail="Questions asked through the embedded widget." />
+                    <StatCard icon={BarChart3} label="Unique visitors" value={analytics?.unique_visitors ?? 0} detail="Distinct visitors who chatted with the widget." />
+                    <StatCard icon={CircleAlert} label="Unanswered" value={analytics?.unanswered_count ?? 0} detail={analytics && analytics.unanswered_count > 0 ? "These questions need a new source document." : "No unanswered questions in this period."} />
+                  </section>
+
+                  <section>
+                    <h2 className="mb-3 text-base font-semibold text-white">Analytics</h2>
+                    <AnalyticsPanel analytics={analytics} />
+                  </section>
+
+                  <section>
+                    <h2 className="mb-1 text-base font-semibold text-white">Live sessions</h2>
+                    <p className="mb-4 text-sm text-slate-500">Recent visitor conversations from your embedded widget.</p>
+                    <WidgetHistoryPanel history={widgetHistory} onSearch={handleHistorySearch} exportCsvUrl={userId ? widgetHistoryExportUrl(userId, "csv") : undefined} exportJsonUrl={userId ? widgetHistoryExportUrl(userId, "json") : undefined} />
+                  </section>
                 </div>
-                {/* Section label */}
-                <div>
-                  <h2 style={{ fontSize: "1.125rem", fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>Analytics</h2>
-                  <p style={{ fontSize: "0.8125rem", color: "var(--text-tertiary)", marginTop: "0.125rem" }}>
-                    Performance metrics for your embedded chatbots
+              </motion.div>
+            )}
+
+            {activeView === "builder" && (
+              <motion.div key="builder" {...viewMotion} transition={{ duration: 0.28, ease: "easeOut" }} className="p-4 sm:p-6">
+                <div className="card mb-5 p-5">
+                  <p className="rag3-eyebrow">Step 1 - Appearance · Step 2 - Behaviour · Step 3 - Publish</p>
+                  <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Design a customer-facing assistant</h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+                    Tune brand, tone, instructions and install script in one place. The preview on
+                    the right updates as you type, and saving does not change any embed code already on a site.
                   </p>
                 </div>
-                <AnalyticsPanel analytics={analytics} />
+                <WidgetEmbed userId={userId} />
+              </motion.div>
+            )}
 
-                <div style={{ marginTop: "0.5rem" }}>
-                  <h2 style={{ fontSize: "1.125rem", fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.02em", marginBottom: "0.125rem" }}>Live Sessions</h2>
-                  <p style={{ fontSize: "0.8125rem", color: "var(--text-tertiary)", marginBottom: "1rem" }}>
-                    Real-time visitor conversations from your embedded widget
-                  </p>
-                  <WidgetHistoryPanel history={widgetHistory} onSearch={handleHistorySearch} exportCsvUrl={userId ? widgetHistoryExportUrl(userId, "csv") : undefined} exportJsonUrl={userId ? widgetHistoryExportUrl(userId, "json") : undefined} />
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Builder */}
-          {activeView === "builder" && (
-            <motion.div
-              key="builder"
-              {...viewMotion}
-              transition={{ duration: 0.28, ease: "easeOut" }}
-              style={{ padding: "1.5rem" }}
-            >
-              {/* Mobile-only docs */}
-              <div className="xl:hidden" style={{ marginBottom: "1.25rem" }}>
-                <div className="card" style={{ padding: "1.125rem" }}>
-                  <FileUpload userId={userId} onUploaded={() => refreshAll(userId)} />
-                  <DocumentList documents={documents} onDelete={handleDeleteDocument} />
-                </div>
-              </div>
-              <div className="mb-5 rounded-xl border border-white/10 bg-white/[0.035] p-5">
-                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-300">
-                  <Bot size={13} />
-                  Widget studio
-                </div>
-                <p className="rag3-eyebrow mt-4">Step 01 - Appearance &nbsp;·&nbsp; 02 - Behaviour &nbsp;·&nbsp; 03 - Publish</p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Design a customer-facing AI assistant</h2>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-                  Tune the widget’s brand, tone, instructions, and install script in one place.
-                </p>
-              </div>
-              <WidgetEmbed userId={userId} />
-            </motion.div>
-          )}
-
-          {/* Playground */}
-          {activeView === "playground" && (
-            <motion.div
-              key="playground"
-              {...viewMotion}
-              transition={{ duration: 0.28, ease: "easeOut" }}
-              style={{ height: "calc(100vh - 68px)", display: "flex", flexDirection: "column" }}
-            >
-              <ChatInterface
-                userId={userId}
-                messages={messages}
-                documents={documents}
-                onMessagesChange={setMessages}
-                onRefreshHistory={() => refreshAll(userId)}
-              />
-            </motion.div>
-          )}
+            {activeView === "playground" && (
+              <motion.div key="playground" {...viewMotion} transition={{ duration: 0.28, ease: "easeOut" }} className="flex min-h-[calc(100vh-68px)] flex-col lg:min-h-[calc(100vh-68px)]">
+                <ChatInterface
+                  userId={userId}
+                  messages={messages}
+                  documents={documents}
+                  onMessagesChange={setMessages}
+                  onRefreshHistory={() => refreshAll(userId)}
+                />
+              </motion.div>
+            )}
           </AnimatePresence>
         </div>
       </div>
