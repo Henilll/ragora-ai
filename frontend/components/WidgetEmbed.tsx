@@ -11,6 +11,7 @@ type WidgetForm = Omit<WidgetConfig, "widget_id" | "embed_script">;
 const DEFAULT_WIDGET = {
   title: "Ask AI",
   welcome_message: "Hi. Ask me anything from these documents.",
+  suggested_questions: [] as string[],
   theme: "dark" as const,
   accent_color: "#6366f1",
   secondary_color: "#0f172a",
@@ -185,6 +186,15 @@ function WidgetPreview({ form }: { form: WidgetForm }) {
               <div className="max-w-[88%] rounded-lg bg-white/[0.08] px-3 py-2 text-xs leading-5">
                 {form.welcome_message || "Hi. Ask me anything from these documents."}
               </div>
+              {(form.suggested_questions || []).filter((q) => q.trim()).slice(0, 4).length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {(form.suggested_questions || []).filter((q) => q.trim()).slice(0, 4).map((q) => (
+                    <span key={q} className="rounded-full border border-white/20 px-2.5 py-1 text-[11px] leading-4">
+                      {q}
+                    </span>
+                  ))}
+                </div>
+              )}
               <div className="ml-auto max-w-[78%] rounded-lg px-3 py-2 text-xs leading-5" style={{ background: form.accent_color, color: accentText }}>
                 Can you summarize the onboarding policy?
               </div>
@@ -253,7 +263,7 @@ export function WidgetEmbed({ userId }: Props) {
     const existing = await getWidget(userId);
     if (!existing) return;
     setWidget(existing);
-    setForm({ user_id: userId, title: existing.title, welcome_message: existing.welcome_message, theme: existing.theme, accent_color: existing.accent_color, secondary_color: existing.secondary_color, logo_url: existing.logo_url, icon_label: existing.icon_label, company_name: existing.company_name || "", company_site: existing.company_site || "", company_email: existing.company_email || "", launcher_style: existing.launcher_style, launcher_circle_size: existing.launcher_circle_size ?? DEFAULT_WIDGET.launcher_circle_size, launcher_pill_size: existing.launcher_pill_size ?? DEFAULT_WIDGET.launcher_pill_size, border_radius: existing.border_radius, launcher_label: existing.launcher_label, input_placeholder: existing.input_placeholder, position: existing.position, bot_goal: existing.bot_goal, bot_role: existing.bot_role, tone: existing.tone, custom_instructions: existing.custom_instructions, fallback_message: existing.fallback_message, collect_leads: existing.collect_leads, is_enabled: existing.is_enabled });
+    setForm({ user_id: userId, title: existing.title, welcome_message: existing.welcome_message, suggested_questions: existing.suggested_questions ?? [], theme: existing.theme, accent_color: existing.accent_color, secondary_color: existing.secondary_color, logo_url: existing.logo_url, icon_label: existing.icon_label, company_name: existing.company_name || "", company_site: existing.company_site || "", company_email: existing.company_email || "", launcher_style: existing.launcher_style, launcher_circle_size: existing.launcher_circle_size ?? DEFAULT_WIDGET.launcher_circle_size, launcher_pill_size: existing.launcher_pill_size ?? DEFAULT_WIDGET.launcher_pill_size, border_radius: existing.border_radius, launcher_label: existing.launcher_label, input_placeholder: existing.input_placeholder, position: existing.position, bot_goal: existing.bot_goal, bot_role: existing.bot_role, tone: existing.tone, custom_instructions: existing.custom_instructions, fallback_message: existing.fallback_message, collect_leads: existing.collect_leads, is_enabled: existing.is_enabled });
   }
 
   async function handleSave() {
@@ -266,6 +276,7 @@ export function WidgetEmbed({ userId }: Props) {
           : form.fallback_message;
       const saved = await saveWidget({
         ...form,
+        suggested_questions: (form.suggested_questions || []).map((q) => q.trim()).filter(Boolean).map((q) => q.slice(0, 140)).slice(0, 4),
         logo_url: form.logo_url.trim(),
         accent_color: isHexColor(form.accent_color) ? form.accent_color : DEFAULT_WIDGET.accent_color,
         secondary_color: isHexColor(form.secondary_color) ? form.secondary_color : DEFAULT_WIDGET.secondary_color,
@@ -275,7 +286,7 @@ export function WidgetEmbed({ userId }: Props) {
         fallback_message: fallback,
       });
       setWidget(saved);
-      setForm((current) => ({ ...current, fallback_message: saved.fallback_message }));
+      setForm((current) => ({ ...current, fallback_message: saved.fallback_message, suggested_questions: saved.suggested_questions ?? [] }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save widget");
     } finally {
@@ -506,6 +517,32 @@ export function WidgetEmbed({ userId }: Props) {
           <input className="inp" value={form.launcher_label} onChange={(e) => setForm({ ...form, launcher_label: e.target.value })} placeholder="Launcher button label" />
           <input className="inp" value={form.input_placeholder} onChange={(e) => setForm({ ...form, input_placeholder: e.target.value })} placeholder="Input placeholder text" />
           <textarea className="inp" value={form.welcome_message} onChange={(e) => setForm({ ...form, welcome_message: e.target.value })} rows={2} placeholder="Welcome message" style={{ resize: "none" }} />
+          <div>
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <label className="text-xs font-semibold text-slate-300">Suggested questions</label>
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, suggested_questions: ["What services do you offer?", "How do I get started?", "How can I contact support?"] })}
+                className="text-xs font-semibold text-indigo-300 hover:text-indigo-200"
+              >
+                Use examples
+              </button>
+            </div>
+            <textarea
+              className="inp"
+              value={(form.suggested_questions || []).join("\n")}
+              onChange={(e) => setForm({ ...form, suggested_questions: e.target.value.split("\n") })}
+              rows={4}
+              placeholder={"One question per line, up to 4.\nExample: What is your return policy?"}
+              style={{ resize: "none" }}
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              These show as chips under the welcome message on the visitor&apos;s site. Leave blank to use Ragora&apos;s generic chips. Only the first 4 lines are saved.
+              {(form.suggested_questions || []).filter((q) => q.trim()).length > 4 && (
+                <span className="text-amber-300"> Only the first 4 will show.</span>
+              )}
+            </p>
+          </div>
           <div className="grid gap-2 md:grid-cols-2">
             <select className="inp" value={form.theme} onChange={(e) => setForm({ ...form, theme: e.target.value as "dark" | "light" })}>
               <option value="dark">Dark</option>
