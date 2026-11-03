@@ -7,34 +7,35 @@
 :root {
   color-scheme: dark;
 
-  /* Core palette */
-  --ink: #10131b;
-  --surface-0: #141823;
-  --surface-1: #191e2b;
-  --surface-2: #202638;
-  --surface-3: #293147;
+  /* Core palette - Ragora v3: ink, paper, burnt orange. One accent only. */
+  --ink: #0C0E11;
+  --surface-0: #12151A;
+  --surface-1: #171B21;
+  --surface-2: #1D222A;
+  --surface-3: #262C36;
+  --paper: #F2EFE7;
 
   /* Borders */
-  --border-subtle: rgba(255,255,255,0.08);
-  --border-default: rgba(255,255,255,0.12);
-  --border-strong: rgba(255,255,255,0.18);
+  --border-subtle: rgba(255,255,255,0.07);
+  --border-default: rgba(255,255,255,0.11);
+  --border-strong: rgba(255,255,255,0.20);
 
-  /* Accent */
-  --accent: #8b5cf6;
-  --accent-light: #c4b5fd;
-  --accent-dim: rgba(139,92,246,0.14);
-  --accent-glow: rgba(139,92,246,0.32);
+  /* Accent - single burnt orange, no glow */
+  --accent: #E8490F;
+  --accent-light: #FF6B2C;
+  --accent-dim: rgba(232,73,15,0.12);
+  --accent-glow: rgba(232,73,15,0.00);
 
-  /* Semantic */
-  --success: #34d399;
-  --warning: #fbbf24;
-  --danger: #f87171;
-  --muted: #94a3b8;
+  /* Semantic - muted, not neon */
+  --success: #2E9E6B;
+  --warning: #D97706;
+  --danger: #D64545;
+  --muted: #9A958A;
 
-  /* Text */
-  --text-primary: #f1f5f9;
-  --text-secondary: #a7b4c7;
-  --text-tertiary: #64748b;
+  /* Text - warm paper whites */
+  --text-primary: #F2EFE7;
+  --text-secondary: #B0ABA0;
+  --text-tertiary: #76716A;
 }
 
 * {
@@ -102,12 +103,12 @@ button, input, textarea, select {
 .text-tertiary  { color: var(--text-tertiary); }
 .text-accent    { color: var(--accent-light); }
 
-/* Card */
+/* Card - flat ink surface, hairline border, no gradient, no glow */
 .card {
-  background: linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025));
+  background: var(--surface-1);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
-  box-shadow: 0 22px 70px rgba(0,0,0,0.28);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.28);
 }
 
 .card-sm {
@@ -116,20 +117,19 @@ button, input, textarea, select {
   border-radius: 8px;
 }
 
-/* Accent button */
+/* Accent button - burnt orange */
 .btn-accent {
   background: var(--accent);
   color: #fff;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   font-weight: 600;
   font-size: 0.8125rem;
   cursor: pointer;
-  transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+  transition: background 0.15s, transform 0.1s;
 }
 .btn-accent:hover:not(:disabled) {
   background: var(--accent-light);
-  box-shadow: 0 0 20px var(--accent-glow);
 }
 .btn-accent:active:not(:disabled) { transform: scale(0.98); }
 .btn-accent:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -183,12 +183,12 @@ button, input, textarea, select {
 .badge-accent {
   background: var(--accent-dim);
   color: var(--accent-light);
-  border-color: rgba(99,102,241,0.2);
+  border-color: rgba(232,73,15,0.25);
 }
 .badge-success {
-  background: rgba(52,211,153,0.1);
-  color: #34d399;
-  border-color: rgba(52,211,153,0.2);
+  background: rgba(46,158,107,0.12);
+  color: #5EC99A;
+  border-color: rgba(46,158,107,0.25);
 }
 
 /* Divider */
@@ -261,18 +261,13 @@ button, input, textarea, select {
 
 .premium-shell {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 18% 10%, rgba(139,92,246,0.22), transparent 34rem),
-    radial-gradient(circle at 86% 6%, rgba(20,184,166,0.16), transparent 30rem),
-    radial-gradient(circle at 48% 42%, rgba(59,130,246,0.13), transparent 38rem),
-    linear-gradient(180deg, #07080d 0%, #0a0b12 48%, #08090d 100%);
+  background: var(--ink);
 }
 
 .glass {
-  background: linear-gradient(180deg, rgba(255,255,255,0.095), rgba(255,255,255,0.038));
-  border: 1px solid rgba(255,255,255,0.11);
-  box-shadow: 0 24px 90px rgba(0,0,0,0.34);
-  backdrop-filter: blur(22px);
+  background: var(--surface-1);
+  border: 1px solid var(--border-default);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.28);
 }
 
 .hairline {
@@ -280,12 +275,7 @@ button, input, textarea, select {
 }
 
 .text-gradient {
-  background: linear-gradient(90deg, #ffffff 0%, #dbeafe 28%, #c4b5fd 58%, #5eead4 100%);
-  background-size: 180% 180%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: gradientShift 8s ease infinite;
+  color: var(--text-primary);
 }
 
 .float-slow {
@@ -313,11 +303,19 @@ button, input, textarea, select {
 }
 
 .auth-input:focus {
-  border-color: rgba(196,181,253,0.7);
-  box-shadow: 0 0 0 4px rgba(139,92,246,0.16);
+  border-color: rgba(232,73,15,0.7);
+  box-shadow: 0 0 0 4px rgba(232,73,15,0.16);
   background: rgba(12,14,22,0.9);
 }
 
 .auth-input::placeholder {
   color: rgba(148,163,184,0.72);
+}
+
+/* ── Ragora v3 utilities ── */
+.rag3-eyebrow { font-family: 'DM Mono', monospace; font-size: 0.6875rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-tertiary); font-weight: 500; }
+.rag3-accent-bar { border-left: 3px solid var(--accent); }
+.rag3-flat-shadow { box-shadow: 0 12px 32px rgba(0,0,0,0.28); }
+@media (prefers-reduced-motion: reduce) {
+  .fade-up, .fade-up-d1, .fade-up-d2, .fade-up-d3, .fade-up-d4 { animation: none; }
 }

@@ -1,4 +1,7 @@
-/* Ragora Widget v2 - drop-in replacement for backend/app/static/widget.js
+/* Ragora Widget v3 - drop-in replacement for backend/app/static/widget.js (v2 contract kept)
+ * v3 adds: unread badge on the launcher, day separators, a typing indicator
+ * before the first streamed token, source pills, a mobile drag handle and
+ * a paper-light bot bubble. No new backend endpoint, no embed-code change.
  *
  * Same public contract as v1, so no host-page change is needed:
  *   <script src=".../widget.js" data-key="w_..." data-theme="light" data-shortcut="true" defer></script>
@@ -160,7 +163,19 @@
       "#" + root.id + ".rag2-right{right:20px;align-items:flex-end}",
       "#" + root.id + " *{box-sizing:border-box}",
       ".rag2-panel{width:min(400px,calc(100vw - 24px));height:min(640px,calc(100vh - 100px));margin-bottom:12px;border:1px solid rgba(120,130,150,.28);border-radius:var(--rag2-radius);overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.35);display:none;flex-direction:column;background:#fff;color:#111827}",
-      ".rag2-panel.open{display:flex}",
+      ".rag2-panel.open{display:flex;animation:rag2in .22s ease}",
+      "@keyframes rag2in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}",
+      ".rag2-launch:hover{transform:translateY(-1px)}",
+      ".rag2-launch{position:relative}",
+      ".rag2-unread{position:absolute;top:-6px;right:-6px;min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:#E8490F;color:#fff;font-size:11px;font-weight:800;display:none;place-items:center;border:2px solid #fff}",
+      ".rag2-day{align-self:center;font-family:ui-monospace,Menlo,monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;opacity:.65;border:1px solid rgba(120,130,150,.35);padding:3px 9px;border-radius:999px}",
+      ".rag2-typing i{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--rag2-accent);margin-right:3px;animation:rag2typing 1s infinite}",
+      ".rag2-typing i:nth-child(2){animation-delay:.15s}.rag2-typing i:nth-child(3){animation-delay:.3s}",
+      "@keyframes rag2typing{0%,100%{opacity:.3}50%{opacity:1}}",
+      ".rag2-handle{display:none}",
+      ".rag2-panel:not(.dark) .rag2-bot{background:#fff;border:1px solid rgba(120,130,150,.22);border-left:3px solid var(--rag2-accent)}",
+      ".rag2-chip:focus-visible,.rag2-input:focus-visible,.rag2-send:focus-visible,.rag2-stop:focus-visible,.rag2-launch:focus-visible{outline:2px solid var(--rag2-accent);outline-offset:2px}",
+      "@media (prefers-reduced-motion:reduce){.rag2-panel.open{animation:none}.rag2-cursor{animation:none}.rag2-typing i{animation:none}.rag2-launch:hover{transform:none}}",
       ".rag2-panel.dark{background:#0d0f14;color:#f1f5f9}",
       ".rag2-topbar{height:4px;background:var(--rag2-accent);flex-shrink:0}",
       ".rag2-head{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--rag2-head);color:#fff;flex-shrink:0}",
@@ -221,7 +236,7 @@
       ".rag2-launch-icon{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.28);display:grid;place-items:center;font-size:12px;font-weight:800;overflow:hidden;flex-shrink:0}",
       ".rag2-launch-icon img{width:100%;height:100%;object-fit:cover}",
       ".rag2-launch-dot{width:8px;height:8px;border-radius:50%;background:#34d399;flex-shrink:0}",
-      "@media (max-width:520px){#" + root.id + "{left:12px;right:12px;bottom:12px}.rag2-panel{width:calc(100vw - 24px);height:calc(100dvh - 96px);margin-bottom:10px}}"
+      "@media (max-width:520px){#" + root.id + "{left:12px;right:12px;bottom:12px}.rag2-panel{width:calc(100vw - 24px);height:calc(100dvh - 96px);margin-bottom:10px;border-radius:18px 18px 0 0}.rag2-handle{display:block;width:36px;height:4px;border-radius:999px;background:rgba(120,130,150,.45);margin:8px auto 0;flex-shrink:0}}"
     ].join("");
     document.head.appendChild(style);
 
@@ -241,11 +256,28 @@
       target.textContent = state.config.icon_label || "AI";
     }
     function timeNow() { var d = new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
+    function todayISO() { var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+    function dayLabel(day) {
+      var today = todayISO();
+      if (day === today) return "Today";
+      var y = new Date(); y.setDate(y.getDate() - 1);
+      var yday = y.getFullYear() + "-" + String(y.getMonth() + 1).padStart(2, "0") + "-" + String(y.getDate()).padStart(2, "0");
+      if (day === yday) return "Yesterday";
+      try { return new Date(day + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); } catch (e) { return day; }
+    }
+    var unreadCount = 0, lastDay = "";
+    function setUnread(n) {
+      unreadCount = n;
+      var badge = launcher.querySelector(".rag2-unread");
+      if (!badge) return;
+      badge.textContent = n > 9 ? "9+" : String(n);
+      badge.style.display = n > 0 ? "grid" : "none";
+    }
 
     var panel = document.createElement("div");
     panel.className = "rag2-panel"; panel.setAttribute("role", "dialog"); panel.setAttribute("aria-label", "Chat");
     panel.innerHTML =
-      '<div class="rag2-topbar"></div>' +
+      '<div class="rag2-topbar"></div><div class="rag2-handle"></div>' +
       '<div class="rag2-head"><div class="rag2-mark"></div><div><h3></h3><p><span class="rag2-dot"></span><span class="rag2-sub">Answers from your documents</span></p></div>' +
       '<div class="rag2-hbtn"><button type="button" class="rag2-new">New chat</button><button type="button" class="rag2-close" aria-label="Close chat">Close</button></div></div>' +
       '<div class="rag2-msgs" aria-live="polite"></div>' +
@@ -261,7 +293,7 @@
     var stopBtn = panel.querySelector(".rag2-stop");
     var launcher = document.createElement("button");
     launcher.className = "rag2-launch"; launcher.setAttribute("aria-expanded", "false");
-    launcher.innerHTML = '<span class="rag2-launch-icon"></span><span class="rag2-launch-label"></span><span class="rag2-launch-dot"></span>';
+    launcher.innerHTML = '<span class="rag2-launch-icon"></span><span class="rag2-launch-label"></span><span class="rag2-launch-dot"></span><span class="rag2-unread"></span>';
     root.appendChild(launcher);
 
     function setStatus(text) {
@@ -295,6 +327,8 @@
       root.style.setProperty("--rag2-radius", clamp(state.config.border_radius, 0, 28) + "px");
       root.className = state.config.position === "bottom-left" ? "rag2-left" : "rag2-right";
       panel.querySelector("h3").textContent = state.config.title;
+      var sub = panel.querySelector(".rag2-sub");
+      if (sub) sub.textContent = state.config.company_name ? state.config.company_name + " - Answers from your documents" : "Answers from your documents";
       panel.setAttribute("aria-label", state.config.title);
       inputEl.placeholder = state.config.input_placeholder || "Ask a question";
       setLogo(panel.querySelector(".rag2-mark"));
@@ -308,7 +342,7 @@
       setLogo(launcher.querySelector(".rag2-launch-icon"));
       launcher.setAttribute("aria-label", state.open ? "Close chat" : "Open chat: " + state.config.title);
     }
-    function openChat() { state.open = true; panel.classList.add("open"); launcher.setAttribute("aria-expanded", "true"); launcher.setAttribute("aria-label", "Close chat"); inputEl.focus(); }
+    function openChat() { state.open = true; setUnread(0); panel.classList.add("open"); launcher.setAttribute("aria-expanded", "true"); launcher.setAttribute("aria-label", "Close chat"); inputEl.focus(); }
     function closeChat() { state.open = false; panel.classList.remove("open"); launcher.setAttribute("aria-expanded", "false"); setThemeAndBrand(); }
     function toggleChat() { state.open ? closeChat() : openChat(); }
     launcher.onclick = toggleChat;
@@ -360,7 +394,7 @@
         var sum = document.createElement("summary"); sum.textContent = "Sources (" + msg.sources.length + ")";
         det.appendChild(sum);
         msg.sources.forEach(function (s) {
-          var a = document.createElement("span"); a.textContent = s; a.style.display = "block"; a.style.fontSize = "12px"; a.style.marginTop = "4px";
+          var a = document.createElement("span"); a.textContent = s; a.style.display = "inline-block"; a.style.fontSize = "11px"; a.style.border = "1px solid rgba(120,130,150,.35)"; a.style.borderRadius = "999px"; a.style.padding = "3px 8px"; a.style.margin = "4px 4px 0 0";
           det.appendChild(a);
         });
         node.appendChild(det);
@@ -368,6 +402,11 @@
     }
     function addMessage(msg, opts) {
       opts = opts || {};
+      if (msg.day && msg.day !== lastDay) {
+        lastDay = msg.day;
+        var sep = document.createElement("div"); sep.className = "rag2-day"; sep.textContent = dayLabel(msg.day);
+        msgsEl.appendChild(sep);
+      }
       var node = document.createElement("div");
       node.className = "rag2-msg " + (msg.role === "user" ? "rag2-user" : "rag2-bot");
       var body = document.createElement("div"); body.className = "rag2-body"; node.appendChild(body);
@@ -433,13 +472,13 @@
     }
     function sendTextInternal(text) {
       state.lastUserMessage = text;
-      var userMsg = { role: "user", text: text, ts: timeNow() };
+      var userMsg = { role: "user", text: text, ts: timeNow(), day: todayISO() };
       state.messages.push(userMsg); saveMessages();
       addMessage(userMsg, { forceScroll: true });
-      var botMsg = { role: "bot", text: "", sources: [], ts: timeNow() };
+      var botMsg = { role: "bot", text: "", sources: [], ts: timeNow(), day: todayISO() };
       var botNode = addMessage(botMsg, { forceScroll: true });
       var bodyEl = botNode.querySelector(".rag2-body");
-      bodyEl.innerHTML = '<span class="rag2-cursor"></span>';
+      bodyEl.innerHTML = '<span class="rag2-typing"><i></i><i></i><i></i></span>';
       setStatus("Searching your documents...");
       var controller = null;
       try { controller = new AbortController(); } catch (e) {}
@@ -536,6 +575,7 @@
         if (!fromJson && !botMsg.text) botNode.remove();
         renderMessageNode(botNode, botMsg);
         setStatus(null); setStreaming(false); showJumpButton();
+        if (botMsg.text && !state.open) setUnread(unreadCount + 1);
         if (botMsg.text) {
           showFollowups();
           if (LEAD_RE.test(text)) showLeadCard(text);

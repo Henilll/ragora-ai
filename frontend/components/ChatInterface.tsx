@@ -72,10 +72,9 @@ export function ChatInterface({ userId, messages, documents, onMessagesChange, o
 
   return (
     <section className="relative" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(139,92,246,0.12),transparent_30rem)]" />
       {/* Header */}
       <div
-        className="relative z-10 border-b border-white/10 bg-slate-950/45 px-5 py-4 backdrop-blur-xl"
+        className="relative z-10 border-b border-white/10 bg-[#0C0E11] px-5 py-4"
         style={{ flexShrink: 0 }}
       >
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-4">
@@ -105,7 +104,7 @@ export function ChatInterface({ userId, messages, documents, onMessagesChange, o
               {processingDocuments.length} processing
             </span>
           )}
-          <span className="rounded-full border border-violet-300/20 bg-violet-300/10 px-3 py-1 text-xs font-semibold text-violet-100">
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-300">
             {readyDocuments.length} active {readyDocuments.length === 1 ? "file" : "files"}
           </span>
         </div>
@@ -133,7 +132,7 @@ export function ChatInterface({ userId, messages, documents, onMessagesChange, o
               {readyDocuments.length > 0 && (
                 <div className="mx-auto mt-5 flex max-w-xl flex-wrap justify-center gap-2">
                   {readyDocuments.slice(0, 5).map((document) => (
-                    <span key={document.id} className="rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-xs font-medium text-teal-100">
+                    <span key={document.id} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-slate-300">
                       {document.file_name}
                     </span>
                   ))}
@@ -238,7 +237,7 @@ export function ChatInterface({ userId, messages, documents, onMessagesChange, o
 
       {/* Input */}
       <div
-        className="relative z-10 border-t border-white/10 bg-slate-950/55 px-5 py-4 backdrop-blur-xl"
+        className="relative z-10 border-t border-white/10 bg-[#0C0E11] px-5 py-4"
         style={{ flexShrink: 0 }}
       >
         <form

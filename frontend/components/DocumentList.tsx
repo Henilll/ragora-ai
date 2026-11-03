@@ -18,7 +18,7 @@ export function DocumentList({ documents, onDelete }: Props) {
           Uploaded PDFs
         </p>
         {documents.length > 0 && (
-          <span className="rounded-full border border-teal-300/20 bg-teal-300/10 px-2 py-0.5 text-[11px] font-semibold text-teal-100">
+          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-slate-300">
             {readyCount}/{documents.length} ready
           </span>
         )}
@@ -68,7 +68,7 @@ export function DocumentList({ documents, onDelete }: Props) {
                         ? "bg-rose-400"
                         : document.status === "processing"
                           ? "bg-amber-300"
-                          : "bg-teal-300"
+                          : "bg-[#5EC99A]"
                     }`}
                   />
                   <p style={{ fontSize: "0.6875rem", color: "var(--text-tertiary)" }}>

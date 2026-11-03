@@ -38,9 +38,9 @@ const NAV_ITEMS: { id: View; label: string; icon: typeof BarChart3; description:
 ];
 
 const viewMotion = {
-  initial: { opacity: 0, y: 12, filter: "blur(6px)" },
-  animate: { opacity: 1, y: 0, filter: "blur(0px)" },
-  exit: { opacity: 0, y: -8, filter: "blur(6px)" },
+  initial: { opacity: 0, y: 10 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -6 },
 };
 
 function InsightCard({
@@ -60,9 +60,9 @@ function InsightCard({
     <motion.div
       whileHover={{ y: -4, scale: 1.01 }}
       transition={{ type: "spring", stiffness: 260, damping: 22 }}
-      className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.045] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.22)]"
+      className="relative overflow-hidden rounded-xl border border-white/10 bg-[#171B21] p-4 shadow-[0_12px_32px_rgba(0,0,0,0.28)]"
     >
-      <div className={`absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent ${tone} to-transparent`} />
+      <div className="absolute inset-y-4 left-0 w-[3px] rounded-full" style={{ background: tone }} />
       <div className="mb-4 flex items-center justify-between">
         <div className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.07]">
           <Icon size={17} className="text-white" />
@@ -128,7 +128,6 @@ export default function DashboardPage() {
 
   return (
     <div className="premium-shell" style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
-      <div aria-hidden className="mesh-line pointer-events-none fixed inset-0 opacity-30" />
 
       {/* ── Left rail: Chat history (lg+) ── */}
       {/* <HistorySidebar messages={messages} /> */}
@@ -141,8 +140,7 @@ export default function DashboardPage() {
           flexShrink: 0,
           flexDirection: "column",
           borderRight: "1px solid rgba(255,255,255,0.10)",
-          background: "rgba(6,7,12,0.74)",
-          backdropFilter: "blur(24px)",
+          background: "#0C0E11",
           padding: "1.25rem 1rem",
           gap: "0",
           overflowY: "auto",
@@ -152,7 +150,7 @@ export default function DashboardPage() {
         {/* Workspace header */}
         <div style={{ marginBottom: "1.5rem" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", marginBottom: "0.375rem" }}>
-            <div style={{ width: 36, height: 36, borderRadius: 8, background: "#fff", color: "#07080d", display: "grid", placeItems: "center", boxShadow: "0 0 32px rgba(196,181,253,0.28)" }}>
+            <div style={{ width: 36, height: 36, borderRadius: 8, background: "#E8490F", color: "#fff", display: "grid", placeItems: "center" }}>
               <Sparkles size={16} />
             </div>
             <div style={{ minWidth: 0 }}>
@@ -178,9 +176,9 @@ export default function DashboardPage() {
                 type="button"
                 onClick={() => setActiveView(item.id)}
                 className="group relative flex w-full items-center gap-3 overflow-hidden rounded-lg px-3 py-2.5 text-left text-sm font-medium transition"
-                style={active ? { background: "rgba(139,92,246,0.16)", color: "#ddd6fe", marginBottom: "0.25rem" } : { color: "var(--text-secondary)", marginBottom: "0.25rem" }}
+                style={active ? { background: "rgba(232,73,15,0.12)", color: "#FF6B2C", marginBottom: "0.25rem" } : { color: "var(--text-secondary)", marginBottom: "0.25rem" }}
               >
-                {active && <motion.span layoutId="dashboard-nav-active" className="absolute inset-y-1 left-1 w-1 rounded-full bg-violet-200" />}
+                {active && <motion.span layoutId="dashboard-nav-active" className="absolute inset-y-1 left-1 w-1 rounded-full" style={{ background: "#E8490F" }} />}
                 <Icon size={15} />
                 <span className="flex-1">
                   <span className="block">{item.label}</span>
@@ -193,7 +191,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="rounded-lg border border-white/10 bg-white/[0.04] p-3" style={{ marginBottom: "1.25rem" }}>
-          <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-teal-100">
+          <div className="mb-2 flex items-center gap-2 text-xs font-semibold" style={{ color: "#5EC99A" }}>
             <ShieldCheck size={14} />
             Auth secured
           </div>
@@ -224,7 +222,7 @@ export default function DashboardPage() {
 
         {/* Top bar */}
         <header
-          className="relative z-10 border-b border-white/10 bg-slate-950/60 px-4 backdrop-blur-2xl sm:px-6"
+          className="relative z-10 border-b border-white/10 bg-[#0C0E11] px-4 sm:px-6"
           style={{ height: 68, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}
         >
           {/* Breadcrumb */}
@@ -288,11 +286,11 @@ export default function DashboardPage() {
               style={{ alignItems: "center", gap: "0.5rem" }}
             >
               {isAdmin && (
-                <Link href="/admin" className="rounded-lg border border-violet-300/20 bg-violet-300/10 px-3 py-1.5 text-xs font-semibold text-violet-100 hover:bg-violet-300/15">
+                <Link href="/admin" className="rounded-lg border border-[#E8490F]/30 bg-[#E8490F]/10 px-3 py-1.5 text-xs font-semibold text-[#FF6B2C] hover:bg-[#E8490F]/15">
                   Admin
                 </Link>
               )}
-              <span className="rounded-full border border-teal-300/20 bg-teal-300/10 px-2.5 py-1 text-[11px] font-semibold text-teal-100">Secure</span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-slate-300">Secure</span>
               <div
                 style={{
                   width: 28,
@@ -348,22 +346,22 @@ export default function DashboardPage() {
                   initial={{ opacity: 0, scale: 0.985 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.34, ease: "easeOut" }}
-                  className="glass relative overflow-hidden rounded-xl p-5 sm:p-6"
+                  className="relative overflow-hidden rounded-xl border border-white/10 bg-[#171B21] p-5 sm:p-6"
                 >
-                  <div aria-hidden className="absolute right-0 top-0 h-48 w-48 rounded-full bg-violet-400/20 blur-3xl" />
-                  <div aria-hidden className="absolute bottom-0 left-1/3 h-32 w-64 rounded-full bg-teal-300/10 blur-3xl" />
+                  <div aria-hidden className="absolute inset-y-5 left-0 w-[3px] rounded-full" style={{ background: "#E8490F" }} />
                   <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
                     <div>
-                      <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-violet-300/20 bg-violet-300/10 px-3 py-1 text-xs font-semibold text-violet-100">
+                      <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-300">
                         <Zap size={13} />
                         Live knowledge operations
                       </div>
+                      <p className="rag3-eyebrow mb-2">Ragora console</p>
                       <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-4xl">Your AI knowledge command center</h1>
                       <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
                         Ragora is watching source coverage, customer questions, answer gaps, and widget readiness for <span className="font-semibold text-slate-200">{userId}</span>.
                       </p>
                       <div className="mt-5 flex flex-wrap gap-2">
-                        <button type="button" onClick={() => setActiveView("builder")} className="inline-flex h-10 items-center gap-2 rounded-lg bg-white px-4 text-sm font-semibold text-slate-950 transition hover:bg-violet-100">
+                        <button type="button" onClick={() => setActiveView("builder")} className="inline-flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-semibold text-white transition" style={{ background: "#E8490F" }}>
                           <Rocket size={15} />
                           Deploy widget
                         </button>
@@ -374,15 +372,15 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     <div className="grid min-w-full grid-cols-3 gap-2 text-center sm:min-w-[360px]">
-                      <div className="rounded-lg border border-white/10 bg-white/[0.06] px-4 py-3 backdrop-blur">
+                      <div className="rounded-lg border border-white/10 bg-[#12151A] px-4 py-3">
                         <p className="text-xl font-semibold text-white">{documents.length}</p>
                         <p className="text-[11px] text-slate-500">Sources</p>
                       </div>
-                      <div className="rounded-lg border border-white/10 bg-white/[0.06] px-4 py-3 backdrop-blur">
+                      <div className="rounded-lg border border-white/10 bg-[#12151A] px-4 py-3">
                         <p className="text-xl font-semibold text-white">{analytics?.unique_visitors ?? 0}</p>
                         <p className="text-[11px] text-slate-500">Visitors</p>
                       </div>
-                      <div className="rounded-lg border border-white/10 bg-white/[0.06] px-4 py-3 backdrop-blur">
+                      <div className="rounded-lg border border-white/10 bg-[#12151A] px-4 py-3">
                         <p className="text-xl font-semibold text-white">{analytics?.average_latency_ms ?? 0}ms</p>
                         <p className="text-[11px] text-slate-500">Latency</p>
                       </div>
@@ -390,9 +388,9 @@ export default function DashboardPage() {
                   </div>
                 </motion.div>
                 <div className="grid gap-3 lg:grid-cols-3">
-                  <InsightCard icon={FileStack} label="Knowledge coverage" value={`${documents.length} files`} tone="via-violet-300/70" detail="Add more source documents to improve answer depth and reduce unknowns." />
-                  <InsightCard icon={Activity} label="Answer demand" value={analytics?.user_messages ?? 0} tone="via-teal-300/70" detail="Customer and tester questions collected from your embedded assistant." />
-                  <InsightCard icon={ShieldCheck} label="Trust layer" value="JWT" tone="via-sky-300/70" detail="Workspace APIs are protected with bearer tokens and server-side ownership checks." />
+                  <InsightCard icon={FileStack} label="Knowledge coverage" value={`${documents.length} files`} tone="#E8490F" detail="Add more source documents to improve answer depth and reduce unknowns." />
+                  <InsightCard icon={Activity} label="Answer demand" value={analytics?.user_messages ?? 0} tone="#2E9E6B" detail="Customer and tester questions collected from your embedded assistant." />
+                  <InsightCard icon={ShieldCheck} label="Trust layer" value="JWT" tone="#D97706" detail="Workspace APIs are protected with bearer tokens and server-side ownership checks." />
                 </div>
                 {/* Section label */}
                 <div>
@@ -430,11 +428,12 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div className="mb-5 rounded-xl border border-white/10 bg-white/[0.035] p-5">
-                <div className="inline-flex items-center gap-2 rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-xs font-semibold text-teal-100">
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-300">
                   <Bot size={13} />
                   Widget studio
                 </div>
-                <h2 className="mt-4 text-2xl font-semibold tracking-tight text-white">Design a customer-facing AI assistant</h2>
+                <p className="rag3-eyebrow mt-4">Step 01 - Appearance &nbsp;·&nbsp; 02 - Behaviour &nbsp;·&nbsp; 03 - Publish</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Design a customer-facing AI assistant</h2>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
                   Tune the widget’s brand, tone, instructions, and install script in one place.
                 </p>

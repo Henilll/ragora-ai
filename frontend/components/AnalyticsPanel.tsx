@@ -8,12 +8,12 @@ type Props = {
 };
 
 const METRIC_CONFIG = [
-  { key: "total_messages", label: "Total Messages", icon: MessageSquare, color: "var(--accent-light)" },
-  { key: "unique_visitors", label: "Unique Visitors", icon: Users, color: "#34d399" },
-  { key: "user_messages", label: "User Questions", icon: BarChart3, color: "#fb923c" },
-  { key: "unanswered_count", label: "No-Answer Replies", icon: AlertTriangle, color: "#fbbf24" },
-  { key: "total_tokens", label: "Est. Tokens", icon: Zap, color: "#e879f9" },
-  { key: "average_latency_ms", label: "Avg Latency", icon: Clock, color: "#38bdf8" },
+  { key: "total_messages", label: "Total Messages", icon: MessageSquare, color: "#FF6B2C" },
+  { key: "unique_visitors", label: "Unique Visitors", icon: Users, color: "#5EC99A" },
+  { key: "user_messages", label: "User Questions", icon: BarChart3, color: "#E8490F" },
+  { key: "unanswered_count", label: "No-Answer Replies", icon: AlertTriangle, color: "#D97706" },
+  { key: "total_tokens", label: "Est. Tokens", icon: Zap, color: "#B0ABA0" },
+  { key: "average_latency_ms", label: "Avg Latency", icon: Clock, color: "#8A857B" },
 ];
 
 function MetricCard({
@@ -46,9 +46,10 @@ function MetricCard({
           position: "absolute",
           top: 0,
           left: "1rem",
-          right: "1rem",
-          height: "1px",
-          background: `linear-gradient(90deg, transparent, ${color}40, transparent)`,
+          width: "28px",
+          height: "3px",
+          borderRadius: "999px",
+          background: color,
         }}
       />
       <div
@@ -145,7 +146,7 @@ export function AnalyticsPanel({ analytics }: Props) {
                         width: "100%",
                         height: `${pct}%`,
                         borderRadius: "4px 4px 0 0",
-                        background: `linear-gradient(180deg, var(--accent-light), var(--accent))`,
+                        background: "var(--accent)",
                         opacity: 0.85,
                         transition: "opacity 0.15s",
                       }}

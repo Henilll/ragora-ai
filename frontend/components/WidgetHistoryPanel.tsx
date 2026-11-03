@@ -21,7 +21,7 @@ export function WidgetHistoryPanel({ history }: Props) {
         </div>
         {conversations.length > 0 && (
           <span className="badge-success badge">
-            <Circle size={6} style={{ marginRight: 4, fill: "#34d399" }} />
+            <Circle size={6} style={{ marginRight: 4, fill: "#5EC99A" }} />
             {conversations.length} active
           </span>
         )}
@@ -73,7 +73,7 @@ export function WidgetHistoryPanel({ history }: Props) {
                     </p>
                   </div>
                 </div>
-                <Circle size={8} style={{ color: "#34d399", fill: "#34d399", flexShrink: 0 }} className="pulse" />
+                <Circle size={8} style={{ color: "#5EC99A", fill: "#5EC99A", flexShrink: 0 }} className="pulse" />
               </div>
 
               {/* Message thread */}

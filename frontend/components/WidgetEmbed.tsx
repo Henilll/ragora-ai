@@ -13,8 +13,8 @@ const DEFAULT_WIDGET = {
   welcome_message: "Hi. Ask me anything from these documents.",
   suggested_questions: [] as string[],
   theme: "dark" as const,
-  accent_color: "#6366f1",
-  secondary_color: "#0f172a",
+  accent_color: "#E8490F",
+  secondary_color: "#161513",
   logo_url: "",
   icon_label: "AI",
   company_name: "",
@@ -37,19 +37,19 @@ const DEFAULT_WIDGET = {
 };
 
 const TEMPLATES = [
-  { name: "Customer Care", role: "customer_support", goal: "Help website visitors understand services, answer common questions, collect issue details, and guide them to the right next step.", welcome: "Hi. I can help with questions about our services, support, and next steps.", fallback: "I do not have that information yet. Please share your email or contact support.", color: "#6366f1" },
-  { name: "HR Policies", role: "hr_policy_assistant", goal: "Help employees understand HR policies, benefits, leave rules, onboarding steps, and internal process guidance.", welcome: "Hi. Ask me about HR policies, benefits, leave, or onboarding.", fallback: "I cannot confirm that from the available policy information. Please contact HR.", color: "#8b5cf6" },
-  { name: "Sales Assistant", role: "sales_assistant", goal: "Qualify leads, explain offerings, answer product questions, and encourage visitors to book a demo.", welcome: "Hi. I can help you find the right solution or book a demo.", fallback: "I do not have that detail yet. I can collect your contact details for the sales team.", color: "#0ea5e9" },
-  { name: "Support Desk", role: "technical_support", goal: "Troubleshoot common product issues, ask clarifying questions, and escalate when the answer is not available.", welcome: "Hi. Tell me what is not working and I will help troubleshoot.", fallback: "I do not have a documented fix for that yet. Please share the error and contact details.", color: "#f59e0b" },
-  { name: "Company FAQ", role: "internal_knowledge_base", goal: "Answer company, service, pricing, policy, and process FAQs.", welcome: "Hi. Ask me anything from this company's FAQ and documents.", fallback: "I do not know that from the available information yet.", color: "#10b981" },
+  { name: "Customer Care", role: "customer_support", goal: "Help website visitors understand services, answer common questions, collect issue details, and guide them to the right next step.", welcome: "Hi. I can help with questions about our services, support, and next steps.", fallback: "I do not have that information yet. Please share your email or contact support.", color: "#E8490F" },
+  { name: "HR Policies", role: "hr_policy_assistant", goal: "Help employees understand HR policies, benefits, leave rules, onboarding steps, and internal process guidance.", welcome: "Hi. Ask me about HR policies, benefits, leave, or onboarding.", fallback: "I cannot confirm that from the available policy information. Please contact HR.", color: "#A16207" },
+  { name: "Sales Assistant", role: "sales_assistant", goal: "Qualify leads, explain offerings, answer product questions, and encourage visitors to book a demo.", welcome: "Hi. I can help you find the right solution or book a demo.", fallback: "I do not have that detail yet. I can collect your contact details for the sales team.", color: "#0F766E" },
+  { name: "Support Desk", role: "technical_support", goal: "Troubleshoot common product issues, ask clarifying questions, and escalate when the answer is not available.", welcome: "Hi. Tell me what is not working and I will help troubleshoot.", fallback: "I do not have a documented fix for that yet. Please share the error and contact details.", color: "#D97706" },
+  { name: "Company FAQ", role: "internal_knowledge_base", goal: "Answer company, service, pricing, policy, and process FAQs.", welcome: "Hi. Ask me anything from this company's FAQ and documents.", fallback: "I do not know that from the available information yet.", color: "#2E9E6B" },
 ];
 
 const PRESET_LOGOS = [
   { label: "Spark", initials: "AI", bg: "#6366f1", fg: "#ffffff", shape: "spark" },
-  { label: "Support", initials: "S", bg: "#0ea5e9", fg: "#ffffff", shape: "chat" },
-  { label: "Growth", initials: "G", bg: "#10b981", fg: "#052e1a", shape: "bolt" },
-  { label: "Trust", initials: "T", bg: "#f59e0b", fg: "#241200", shape: "shield" },
-  { label: "Docs", initials: "D", bg: "#8b5cf6", fg: "#ffffff", shape: "doc" },
+  { label: "Support", initials: "S", bg: "#0F766E", fg: "#ffffff", shape: "chat" },
+  { label: "Growth", initials: "G", bg: "#2E9E6B", fg: "#052e1a", shape: "bolt" },
+  { label: "Trust", initials: "T", bg: "#D97706", fg: "#241200", shape: "shield" },
+  { label: "Docs", initials: "D", bg: "#A16207", fg: "#ffffff", shape: "doc" },
 ];
 
 const LOGO_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"];
@@ -84,7 +84,7 @@ function ColorControl({
   value: string;
   onChange: (value: string) => void;
 }) {
-  const color = isHexColor(value) ? value : "#6366f1";
+  const color = isHexColor(value) ? value : "#E8490F";
   return (
     <label className="flex min-h-[42px] items-center gap-2 rounded-lg border border-white/10 bg-slate-950/35 px-2">
       <input
@@ -149,75 +149,156 @@ function WidgetPreview({ form }: { form: WidgetForm }) {
   const circleSize = clampNumber(form.launcher_circle_size ?? DEFAULT_WIDGET.launcher_circle_size, 44, 96);
   const pillSize = clampNumber(form.launcher_pill_size ?? DEFAULT_WIDGET.launcher_pill_size, 44, 80);
   const activeLauncherSize = form.launcher_style === "circle" ? circleSize : pillSize;
+  const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
+  const [demoState, setDemoState] = useState<"idle" | "typing" | "streaming" | "done">("idle");
+  const [demoWords, setDemoWords] = useState(0);
+  const DEMO_ANSWER = "Onboarding takes 3 steps: complete your profile, verify your documents, and book your first session. Most teams finish in one working day.";
+  const demoTokens = DEMO_ANSWER.split(" ");
+  useEffect(() => {
+    if (demoState !== "streaming") return;
+    if (demoWords >= demoTokens.length) { setDemoState("done"); return; }
+    const t = setTimeout(() => setDemoWords((n) => n + 1), 55);
+    return () => clearTimeout(t);
+  }, [demoState, demoWords, demoTokens.length]);
+  function playDemo() {
+    setDemoWords(0);
+    setDemoState("typing");
+    setTimeout(() => setDemoState("streaming"), 650);
+  }
+  function resetDemo() { setDemoState("idle"); setDemoWords(0); }
+  // Theme-aware preview colours. This fixes the old bug where the backdrop
+  // was always a dark gradient, even when the owner picked Light theme.
+  const siteBg = isDark ? "#0C0E11" : "#EDE9E0";
+  const siteText = isDark ? "#F2EFE7" : "#161513";
+  const siteMuted = isDark ? "#76716A" : "#8A857B";
+  const panelBg = isDark ? "#0D0F14" : "#FFFEFA";
+  const panelText = isDark ? "#F2EFE7" : "#161513";
+  const botBubble = isDark ? "#1D222A" : "#FFFFFF";
+  const botBorder = isDark ? "rgba(255,255,255,0.11)" : "#E3DED2";
+  const isMobile = previewMode === "mobile";
+  const chips = (form.suggested_questions || []).filter((q) => q.trim()).slice(0, 4);
   return (
-    <div className="sticky top-5 overflow-hidden rounded-xl border border-white/10 bg-white/[0.045] p-4 shadow-[0_28px_90px_rgba(0,0,0,0.28)]">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="sticky top-5 overflow-hidden rounded-xl border border-white/10 bg-[#12151A] p-4 shadow-[0_12px_32px_rgba(0,0,0,0.28)]">
+      <div className="mb-4 flex items-center justify-between gap-2">
         <div>
           <p className="text-sm font-semibold text-white">Live preview</p>
           <p className="mt-1 text-xs text-slate-500">How your assistant will feel on-site</p>
         </div>
-        <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${form.is_enabled ? "border border-teal-300/20 bg-teal-300/10 text-teal-100" : "border border-white/10 bg-white/5 text-slate-400"}`}>
+        <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${form.is_enabled ? "border border-white/10 bg-white/5 text-slate-300" : "border border-white/10 bg-white/5 text-slate-400"}`}>
           {form.is_enabled ? "Live" : "Paused"}
         </span>
       </div>
-      <div className="relative min-h-[470px] overflow-hidden rounded-xl border border-white/10 bg-[radial-gradient(circle_at_30%_15%,rgba(45,212,191,0.14),transparent_14rem),radial-gradient(circle_at_85%_0%,rgba(99,102,241,0.18),transparent_16rem),linear-gradient(180deg,rgba(15,23,42,0.86),rgba(2,6,23,0.96))] p-4">
-        <div className="absolute left-5 top-5 h-2 w-28 rounded-full bg-white/10" />
-        <div className="absolute left-5 top-10 h-2 w-40 rounded-full bg-white/5" />
-        <div className="absolute bottom-5 right-5">
+      <div className="mb-3 flex items-center gap-2">
+        <div className="flex rounded-lg border border-white/10 bg-white/5 p-1" role="group" aria-label="Preview size">
+          {(["desktop", "mobile"] as const).map((m) => (
+            <button key={m} type="button" onClick={() => setPreviewMode(m)} className={`rounded-md px-3 py-1.5 text-xs font-semibold ${previewMode === m ? "bg-white text-slate-950" : "text-slate-400"}`}>
+              {m === "desktop" ? "Desktop" : "Mobile"}
+            </button>
+          ))}
+        </div>
+        {demoState === "idle" || demoState === "done" ? (
+          <button type="button" onClick={playDemo} className="rounded-lg px-3 py-2 text-xs font-semibold text-white" style={{ background: "#E8490F" }}>
+            {demoState === "done" ? "Replay streaming demo" : "Play streaming demo"}
+          </button>
+        ) : (
+          <button type="button" onClick={resetDemo} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-300">Reset demo</button>
+        )}
+      </div>
+      <div className="relative overflow-hidden rounded-xl border border-white/10 p-4" style={{ background: siteBg, minHeight: isMobile ? 520 : 470 }}>
+        {/* Fake host site chrome, so the preview reads as a real page, not a floating card */}
+        <div className="mb-3 flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ background: "#D8D2C4" }} />
+          <span className="h-2.5 w-2.5 rounded-full" style={{ background: "#D8D2C4" }} />
+          <span className="h-2.5 w-2.5 rounded-full" style={{ background: "#D8D2C4" }} />
+          <span className="ml-1 truncate rounded-md px-2 py-1 font-mono text-[11px]" style={{ background: isDark ? "#1D222A" : "#FFFFFF", color: siteMuted, border: `1px solid ${botBorder}` }}>
+            {form.company_site ? form.company_site.replace(/^https?:\/\//, "") : "your-website.com"}
+          </span>
+        </div>
+        <div className="mb-4">
+          <div className="h-2.5 w-40 rounded-full" style={{ background: isDark ? "#262C36" : "#D8D2C4" }} />
+          <div className="mt-2 h-2 w-56 rounded-full" style={{ background: isDark ? "#1D222A" : "#E3DED2" }} />
+          <p className="mt-2 text-xs" style={{ color: siteMuted }}>{form.company_name || "Your business"} - homepage</p>
+        </div>
+        <div className={`flex ${form.position === "bottom-left" ? "justify-start" : "justify-end"}`}>
           <div
-            className="mb-3 w-[280px] overflow-hidden rounded-xl border shadow-2xl"
+            className="overflow-hidden border shadow-2xl"
             style={{
-              borderColor: "rgba(255,255,255,0.14)",
-              background: isDark ? "#080b14" : "#f8fafc",
-              color: isDark ? "#f8fafc" : "#0f172a",
-              borderRadius: form.border_radius,
+              width: isMobile ? "100%" : 300,
+              borderColor: botBorder,
+              background: panelBg,
+              color: panelText,
+              borderRadius: isMobile ? "18px 18px 0 0" : form.border_radius,
             }}
           >
+            {isMobile && <div className="mx-auto mt-2 h-1 w-9 rounded-full" style={{ background: isDark ? "#262C36" : "#D8D2C4" }} />}
+            <div style={{ height: 4, background: form.accent_color }} />
             <div className="flex items-center gap-3 px-4 py-3" style={{ background: form.secondary_color, color: headerText }}>
-              <div className="grid h-8 w-8 place-items-center overflow-hidden rounded-full text-xs font-bold" style={{ background: form.accent_color, color: accentText }}>
+              <div className="grid h-9 w-9 place-items-center overflow-hidden rounded-lg text-xs font-bold" style={{ background: form.accent_color, color: accentText }}>
                 <LogoMark form={form} />
               </div>
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">{form.title || "Ask AI"}</p>
-                <p className="text-[11px] opacity-65">{form.company_name || "Answers from your knowledge base"}</p>
+                <p className="text-[11px] opacity-65">{form.company_name ? `${form.company_name} - Answers from your documents` : "Answers from your documents"}</p>
               </div>
+              <span className="ml-auto flex items-center gap-1 font-mono text-[10px] uppercase tracking-wide opacity-75"><span className="h-1.5 w-1.5 rounded-full" style={{ background: "#5EC99A" }} />Online</span>
             </div>
             <div className="space-y-3 p-4">
-              <div className="max-w-[88%] rounded-lg bg-white/[0.08] px-3 py-2 text-xs leading-5">
+              <div className="rounded-lg px-3 py-2 text-xs leading-5" style={{ background: botBubble, border: `1px solid ${botBorder}`, borderLeft: `3px solid ${form.accent_color}` }}>
                 {form.welcome_message || "Hi. Ask me anything from these documents."}
               </div>
-              {(form.suggested_questions || []).filter((q) => q.trim()).slice(0, 4).length > 0 && (
+              {chips.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
-                  {(form.suggested_questions || []).filter((q) => q.trim()).slice(0, 4).map((q) => (
-                    <span key={q} className="rounded-full border border-white/20 px-2.5 py-1 text-[11px] leading-4">
-                      {q}
-                    </span>
+                  {chips.map((q) => (
+                    <span key={q} className="rounded-full px-2.5 py-1 text-[11px] leading-4" style={{ border: `1px solid ${botBorder}`, background: botBubble }}>{q}</span>
                   ))}
                 </div>
               )}
               <div className="ml-auto max-w-[78%] rounded-lg px-3 py-2 text-xs leading-5" style={{ background: form.accent_color, color: accentText }}>
                 Can you summarize the onboarding policy?
               </div>
-              <div className="max-w-[92%] rounded-lg bg-white/[0.08] px-3 py-2 text-xs leading-5">
-                Yes. I found the key onboarding steps and can cite the uploaded source document.
-              </div>
-              <div className="max-w-[92%] rounded-lg bg-white/[0.08] px-3 py-2 text-xs leading-5">
-                If I cannot answer, I will route visitors to {form.company_email || "your company email"}.
-              </div>
-              <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-500">
+              {demoState === "typing" && (
+                <div className="max-w-[92%] rounded-lg px-3 py-2 text-xs leading-5" style={{ background: botBubble, border: `1px solid ${botBorder}`, borderLeft: `3px solid ${form.accent_color}` }}>
+                  <span className="inline-flex gap-1"><span className="h-1.5 w-1.5 animate-bounce rounded-full" style={{ background: form.accent_color }} /><span className="h-1.5 w-1.5 animate-bounce rounded-full" style={{ background: form.accent_color, animationDelay: "0.15s" }} /><span className="h-1.5 w-1.5 animate-bounce rounded-full" style={{ background: form.accent_color, animationDelay: "0.3s" }} /></span>
+                </div>
+              )}
+              {(demoState === "streaming" || demoState === "done") && (
+                <div className="max-w-[92%] rounded-lg px-3 py-2 text-xs leading-5" style={{ background: botBubble, border: `1px solid ${botBorder}`, borderLeft: `3px solid ${form.accent_color}` }}>
+                  {demoTokens.slice(0, demoWords).join(" ")}{demoState === "streaming" && <span className="ml-0.5 inline-block h-3 w-[2px] align-middle" style={{ background: form.accent_color }} />}
+                  {demoState === "done" && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <span className="rounded-full px-2 py-0.5 font-mono text-[10px]" style={{ border: `1px solid ${botBorder}` }}>Sources (1) - onboarding-policy.pdf</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {demoState === "done" && (
+                <div className="flex flex-wrap gap-1.5">
+                  {["Explain this in simpler terms", "What are the next steps?"].map((q) => (
+                    <span key={q} className="rounded-full px-2.5 py-1 text-[11px]" style={{ border: `1px solid ${form.accent_color}`, color: form.accent_color }}>{q}</span>
+                  ))}
+                </div>
+              )}
+              {demoState === "idle" && (
+                <div className="max-w-[92%] rounded-lg px-3 py-2 text-xs leading-5" style={{ background: botBubble, border: `1px solid ${botBorder}`, borderLeft: `3px solid ${form.accent_color}` }}>
+                  Yes. I found the key onboarding steps and can cite the uploaded source document.
+                  <div className="mt-1 font-mono text-[10px] uppercase tracking-wide opacity-60">Sources (1) - onboarding-policy.pdf</div>
+                </div>
+              )}
+              <div className="rounded-lg px-3 py-2 text-xs" style={{ border: `1px solid ${botBorder}`, color: siteMuted }}>
                 {form.input_placeholder || "Ask a question"}
               </div>
             </div>
-            <div className="flex items-center justify-center border-t border-white/10 px-3 pb-2.5 pt-2">
-              <div className="inline-flex min-h-7 items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.07] py-1 pl-1 pr-2.5 text-[11px] leading-none opacity-80 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_10px_28px_rgba(2,6,23,0.14)]">
-                <span className="grid h-5 w-5 place-items-center rounded-full bg-gradient-to-br from-teal-400 via-indigo-500 to-fuchsia-500 text-[11px] font-black text-white shadow-[0_6px_16px_rgba(99,102,241,0.34)]">R</span>
-                <span className="font-semibold opacity-60">Powered by</span>
-                <span className="font-black tracking-normal">Ragora.ai</span>
+            <div className="flex items-center justify-center px-3 pb-2.5 pt-2" style={{ borderTop: `1px solid ${botBorder}` }}>
+              <div className="inline-flex min-h-7 items-center gap-1.5 text-[11px] leading-none opacity-70">
+                <span className="grid h-5 w-5 place-items-center rounded-md text-[11px] font-black text-white" style={{ background: form.accent_color, color: accentText }}>R</span>
+                <span>Powered by Ragora</span>
               </div>
             </div>
           </div>
+        </div>
+        {!isMobile && (
           <div
-            className="ml-auto flex items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold shadow-2xl"
+            className="ml-auto mt-3 flex items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold shadow-2xl"
             style={{
               background: form.accent_color,
               color: accentText,
@@ -239,8 +320,67 @@ function WidgetPreview({ form }: { form: WidgetForm }) {
             </span>
             {form.launcher_style === "pill" && (form.launcher_label || "Chat with AI")}
           </div>
-        </div>
+        )}
       </div>
+      <p className="mt-2 text-xs leading-5 text-slate-500">The streaming demo types a real sample answer in the preview. It does not call your backend - it only shows how streaming will feel on a live site.</p>
+    </div>
+  );
+}
+
+function BuilderChecklist({ form, widget }: { form: WidgetForm; widget: WidgetConfig | null }) {
+  const items = [
+    { label: "Widget title set", done: Boolean(form.title.trim()) },
+    { label: "Welcome message set", done: Boolean(form.welcome_message.trim()) },
+    { label: "At least 1 suggested question", done: (form.suggested_questions || []).filter((q) => q.trim()).length > 0 },
+    { label: "Company email set, for fallback routing", done: Boolean(form.company_email.trim()) },
+    { label: "Fallback message set", done: Boolean(form.fallback_message.trim()) },
+    { label: "Accent and header are valid colours", done: isHexColor(form.accent_color) && isHexColor(form.secondary_color) },
+    { label: "Widget saved at least once", done: Boolean(widget?.embed_script) },
+  ];
+  const done = items.filter((i) => i.done).length;
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.045] p-4">
+      <div className="mb-1 flex items-center justify-between">
+        <p className="text-sm font-semibold text-white">Before you publish</p>
+        <span className="font-mono text-xs text-slate-400">{done} / {items.length}</span>
+      </div>
+      <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+        <div className="h-full rounded-full transition-all" style={{ background: "#E8490F", width: `${Math.round((done / items.length) * 100)}%` }} />
+      </div>
+      <ul className="space-y-1.5">
+        {items.map((item) => (
+          <li key={item.label} className="flex items-start gap-2 text-xs text-slate-300">
+            <span className={item.done ? "text-[#5EC99A]" : "text-slate-500"}>{item.done ? "✓" : "○"}</span>
+            <span className={item.done ? "" : "text-slate-400"}>{item.label}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-xs leading-5 text-slate-500">
+        {done === items.length
+          ? "Ready to publish. Copy the embed code and test it on a live page."
+          : "Finish the items above, then Save Chatbot. Suggested questions are optional, but they are the first thing visitors tap."}
+      </p>
+    </div>
+  );
+}
+
+function TestGuide() {
+  const tests = [
+    "Open the live widget and tap a suggested question. It should stream word by word, not appear all at once.",
+    "Ask a question from an uploaded document. Sources should appear under the answer.",
+    "While an answer streams, press Stop. The partial answer should stay, with a Retry option.",
+    "Reload the page. Your conversation should come back.",
+    "Shrink to phone width. The panel should become a bottom sheet, not cover the whole page.",
+    "Ask about price or a demo with lead capture on. A lead card should appear after the answer.",
+  ];
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.045] p-4">
+      <p className="mb-2 text-sm font-semibold text-white">Test it in 2 minutes</p>
+      <ol className="list-decimal space-y-1.5 pl-5 text-xs leading-5 text-slate-400">
+        {tests.map((t) => (
+          <li key={t}>{t}</li>
+        ))}
+      </ol>
     </div>
   );
 }
@@ -356,11 +496,11 @@ export function WidgetEmbed({ userId }: Props) {
   }
 
   return (
-    <section className="glass rounded-xl p-4 sm:p-6">
+    <section className="rounded-xl border border-white/10 bg-[#171B21] p-4 sm:p-6">
       {/* Header */}
       <div className="mb-5 flex flex-col gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: "var(--accent-dim)", border: "1px solid rgba(99,102,241,0.2)", display: "grid", placeItems: "center" }}>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: "var(--accent-dim)", border: "1px solid rgba(232,73,15,0.25)", display: "grid", placeItems: "center" }}>
             <MessageCircle size={15} style={{ color: "var(--accent-light)" }} />
           </div>
           <div>
@@ -465,7 +605,7 @@ export function WidgetEmbed({ userId }: Props) {
                     type="button"
                     onClick={() => logoInputRef.current?.click()}
                     disabled={isLogoUploading}
-                    className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-3 text-xs font-semibold text-slate-950 transition hover:bg-violet-100 disabled:opacity-60"
+                    className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-semibold text-white transition disabled:opacity-60" style={{ background: "#E8490F" }}
                   >
                     {isLogoUploading ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
                     {isLogoUploading ? "Uploading" : "Upload logo"}
@@ -509,14 +649,14 @@ export function WidgetEmbed({ userId }: Props) {
             </div>
           </div>
           <div className="grid gap-2 md:grid-cols-2">
-            <input className="inp" value={form.company_name} onChange={(e) => setForm({ ...form, company_name: e.target.value })} placeholder="Company name" />
-            <input className="inp" value={form.company_email} onChange={(e) => setForm({ ...form, company_email: e.target.value })} type="email" placeholder="Company support email" />
+            <input className="inp" aria-label="Company name" value={form.company_name} onChange={(e) => setForm({ ...form, company_name: e.target.value })} placeholder="Company name" />
+            <input className="inp" aria-label="Company support email" value={form.company_email} onChange={(e) => setForm({ ...form, company_email: e.target.value })} type="email" placeholder="Company support email" />
           </div>
-          <input className="inp" value={form.company_site} onChange={(e) => setForm({ ...form, company_site: e.target.value })} placeholder="Company website (optional)" />
-          <input className="inp" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Widget title" />
-          <input className="inp" value={form.launcher_label} onChange={(e) => setForm({ ...form, launcher_label: e.target.value })} placeholder="Launcher button label" />
-          <input className="inp" value={form.input_placeholder} onChange={(e) => setForm({ ...form, input_placeholder: e.target.value })} placeholder="Input placeholder text" />
-          <textarea className="inp" value={form.welcome_message} onChange={(e) => setForm({ ...form, welcome_message: e.target.value })} rows={2} placeholder="Welcome message" style={{ resize: "none" }} />
+          <input className="inp" aria-label="Company website" value={form.company_site} onChange={(e) => setForm({ ...form, company_site: e.target.value })} placeholder="Company website (optional)" />
+          <input className="inp" aria-label="Widget title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Widget title" />
+          <input className="inp" aria-label="Launcher button label" value={form.launcher_label} onChange={(e) => setForm({ ...form, launcher_label: e.target.value })} placeholder="Launcher button label" />
+          <input className="inp" aria-label="Input placeholder text" value={form.input_placeholder} onChange={(e) => setForm({ ...form, input_placeholder: e.target.value })} placeholder="Input placeholder text" />
+          <textarea className="inp" aria-label="Welcome message" value={form.welcome_message} onChange={(e) => setForm({ ...form, welcome_message: e.target.value })} rows={2} placeholder="Welcome message" style={{ resize: "none" }} />
           <div>
             <div className="mb-1 flex items-center justify-between gap-2">
               <label className="text-xs font-semibold text-slate-300">Suggested questions</label>
@@ -530,6 +670,7 @@ export function WidgetEmbed({ userId }: Props) {
             </div>
             <textarea
               className="inp"
+              aria-label="Suggested questions, one per line"
               value={(form.suggested_questions || []).join("\n")}
               onChange={(e) => setForm({ ...form, suggested_questions: e.target.value.split("\n") })}
               rows={4}
@@ -669,7 +810,11 @@ export function WidgetEmbed({ userId }: Props) {
           </div>
         )}
       </div>
-      <WidgetPreview form={form} />
+      <div className="flex flex-col gap-4">
+        <WidgetPreview form={form} />
+        <BuilderChecklist form={form} widget={widget} />
+        <TestGuide />
+      </div>
       </div>
     </section>
   );
