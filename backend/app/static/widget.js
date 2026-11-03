@@ -1,4 +1,21 @@
-/* Ragora Widget v3 - drop-in replacement for backend/app/static/widget.js (v2 contract kept)
+/* Ragora Widget v4 - drop-in replacement for backend/app/static/widget.js (v2/v3 contract kept)
+ * v4 fixes, from live-site reports:
+ * - Position flash: the launcher used to appear on the left, then jump right,
+ *   because the root had no left/right class until the config fetch returned.
+ *   v4 hides the root until the first brand pass, and defaults to the right.
+ * - Logo: cover-cropping cut square/rectangular logos into a circle. v4 uses
+ *   contain on a white pad, so the whole logo shows, with initials as fallback.
+ * - Sound: soft send/receive chimes via WebAudio (no audio file), with a
+ *   header Sound toggle saved per widget. No sound plays on page load or
+ *   on restored history, only on live messages, after a user gesture.
+ * - Streaming: the parser now normalises CR/LF, accepts 'data:' with or
+ *   without a space, handles the backend 'done' event (it used to wait for
+ *   the connection to close), and guards finish() so Stop cannot duplicate
+ *   a message. While streaming, the body shows plain words (no markdown
+ *   re-parse every 40ms, which caused flicker and code-block snapping);
+ *   full markdown renders once at finish.
+ * - Look: bigger brand mark, chat-style bubble corners, round send button,
+ *   flat ink/paper panels, default accent burnt orange (was cyan).
  * v3 adds: unread badge on the launcher, day separators, a typing indicator
  * before the first streamed token, source pills, a mobile drag handle and
  * a paper-light bot bubble. No new backend endpoint, no embed-code change.
@@ -133,6 +150,30 @@
     }
     var storeKey = "ragora_v2_" + widgetId + "_messages";
     var leadKey = "ragora_v2_" + widgetId + "_lead_done";
+    var soundKey = "ragora_v2_" + widgetId + "_sound";
+    var soundOn = true;
+    try { soundOn = localStorage.getItem(soundKey) !== "0"; } catch (e) {}
+    var audioCtx = null;
+    function playTone(freq, delay, dur) {
+      if (!audioCtx) return;
+      var t0 = audioCtx.currentTime + delay;
+      var osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      osc.type = "sine"; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.06, t0 + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(t0); osc.stop(t0 + dur + 0.05);
+    }
+    function playSound(kind) {
+      if (!soundOn) return;
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === "suspended") audioCtx.resume();
+        if (kind === "send") playTone(720, 0, 0.09);
+        else { playTone(520, 0, 0.10); playTone(760, 0.10, 0.14); }
+      } catch (e) {}
+    }
     var leadDone = false;
     try { leadDone = localStorage.getItem(leadKey) === "1"; } catch (e) {}
 
@@ -140,7 +181,7 @@
       open: false, streaming: false, abort: null, lastUserMessage: "",
       config: {
         title: "Ask AI", welcome_message: "Hi. Ask me anything from these documents.",
-        theme: "dark", accent_color: "#38bdf8", secondary_color: "#0f172a",
+        theme: "dark", accent_color: "#E8490F", secondary_color: "#161513",
         logo_url: "", icon_label: "AI", launcher_style: "pill",
         launcher_circle_size: 60, launcher_pill_size: 56, border_radius: 14,
         launcher_label: "Chat with AI", input_placeholder: "Ask a question",
@@ -155,14 +196,16 @@
     /* ---------- styles (scoped rag2- prefix, no host-page leakage) ---------- */
     var root = document.createElement("div");
     root.id = "rag2-root-" + widgetId;
+    root.className = "rag2-right";
+    root.style.visibility = "hidden";
     document.body.appendChild(root);
     var style = document.createElement("style");
     style.textContent = [
-      "#" + root.id + "{position:fixed;bottom:20px;z-index:2147483647;display:flex;flex-direction:column;align-items:flex-end;font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;--rag2-accent:#38bdf8;--rag2-head:#0f172a;--rag2-accent-text:#fff;--rag2-radius:14px}",
+      "#" + root.id + "{position:fixed;bottom:20px;z-index:2147483647;display:flex;flex-direction:column;align-items:flex-end;font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;--rag2-accent:#E8490F;--rag2-head:#161513;--rag2-accent-text:#fff;--rag2-radius:14px}",
       "#" + root.id + ".rag2-left{left:20px;align-items:flex-start}",
       "#" + root.id + ".rag2-right{right:20px;align-items:flex-end}",
       "#" + root.id + " *{box-sizing:border-box}",
-      ".rag2-panel{width:min(400px,calc(100vw - 24px));height:min(640px,calc(100vh - 100px));margin-bottom:12px;border:1px solid rgba(120,130,150,.28);border-radius:var(--rag2-radius);overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.35);display:none;flex-direction:column;background:#fff;color:#111827}",
+      ".rag2-panel{width:min(400px,calc(100vw - 24px));height:min(640px,calc(100vh - 100px));margin-bottom:12px;border:1px solid rgba(120,130,150,.32);border-radius:var(--rag2-radius);overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.38);display:none;flex-direction:column;background:#FFFEFA;color:#161513}",
       ".rag2-panel.open{display:flex;animation:rag2in .22s ease}",
       "@keyframes rag2in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}",
       ".rag2-launch:hover{transform:translateY(-1px)}",
@@ -176,11 +219,11 @@
       ".rag2-panel:not(.dark) .rag2-bot{background:#fff;border:1px solid rgba(120,130,150,.22);border-left:3px solid var(--rag2-accent)}",
       ".rag2-chip:focus-visible,.rag2-input:focus-visible,.rag2-send:focus-visible,.rag2-stop:focus-visible,.rag2-launch:focus-visible{outline:2px solid var(--rag2-accent);outline-offset:2px}",
       "@media (prefers-reduced-motion:reduce){.rag2-panel.open{animation:none}.rag2-cursor{animation:none}.rag2-typing i{animation:none}.rag2-launch:hover{transform:none}}",
-      ".rag2-panel.dark{background:#0d0f14;color:#f1f5f9}",
+      ".rag2-panel.dark{background:#0C0E11;color:#F2EFE7}",
       ".rag2-topbar{height:4px;background:var(--rag2-accent);flex-shrink:0}",
       ".rag2-head{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--rag2-head);color:#fff;flex-shrink:0}",
-      ".rag2-mark{width:36px;height:36px;flex-shrink:0;display:grid;place-items:center;background:var(--rag2-accent);color:var(--rag2-accent-text);font-weight:800;font-size:13px;border-radius:8px;overflow:hidden}",
-      ".rag2-mark img{width:100%;height:100%;object-fit:cover}",
+      ".rag2-mark{width:44px;height:44px;flex-shrink:0;display:grid;place-items:center;background:var(--rag2-accent);color:var(--rag2-accent-text);font-weight:800;font-size:14px;border-radius:10px;overflow:hidden}",
+      ".rag2-mark img{width:100%;height:100%;object-fit:contain}",
       ".rag2-head h3{font-size:15px;line-height:1.2;margin:0}",
       ".rag2-head p{font-size:11px;line-height:1.3;margin:2px 0 0;opacity:.75;font-family:ui-monospace,Menlo,monospace}",
       ".rag2-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#34d399;margin-right:5px}",
@@ -205,8 +248,8 @@
       ".rag2-msg table{border-collapse:collapse;width:100%;font-size:13px;margin:8px 0}",
       ".rag2-msg th,.rag2-msg td{border:1px solid rgba(120,130,150,.3);padding:5px 7px;text-align:left}",
       ".rag2-msg a{color:var(--rag2-accent);text-decoration:underline}",
-      ".rag2-bot{align-self:flex-start;background:rgba(120,130,150,.12);border-left:3px solid var(--rag2-accent)}",
-      ".rag2-user{align-self:flex-end;background:var(--rag2-accent);color:var(--rag2-accent-text)}",
+      ".rag2-bot{align-self:flex-start;background:rgba(120,130,150,.12);border-left:3px solid var(--rag2-accent);border-radius:14px 14px 14px 4px}",
+      ".rag2-user{align-self:flex-end;background:var(--rag2-accent);color:var(--rag2-accent-text);border-radius:14px 14px 4px 14px}",
       ".rag2-meta{font-family:ui-monospace,Menlo,monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;opacity:.6;margin-top:7px}",
       ".rag2-src{margin-top:8px;border-top:1px solid rgba(120,130,150,.25);padding-top:6px}",
       ".rag2-src summary{cursor:pointer;font-family:ui-monospace,Menlo,monospace;font-size:11px;opacity:.8}",
@@ -226,15 +269,17 @@
       ".rag2-lead button.ghost{background:transparent;color:inherit;border:1px solid rgba(120,130,150,.35);margin-left:6px}",
       ".rag2-foot{border-top:1px solid rgba(120,130,150,.25);padding:10px;display:flex;gap:8px;align-items:flex-end;flex-shrink:0}",
       ".rag2-input{flex:1;min-width:0;border:1px solid rgba(120,130,150,.35);border-radius:10px;background:transparent;color:inherit;padding:9px 11px;font-size:14px;outline:none;resize:none;max-height:110px;font-family:inherit;line-height:1.45}",
-      ".rag2-send{border:0;border-radius:10px;background:var(--rag2-accent);color:var(--rag2-accent-text);font-weight:700;padding:0 14px;height:42px;cursor:pointer;flex-shrink:0}",
+      ".rag2-send{border:0;border-radius:50%;background:var(--rag2-accent);color:var(--rag2-accent-text);font-weight:700;font-size:18px;width:42px;height:42px;padding:0;cursor:pointer;flex-shrink:0}",
       ".rag2-send:disabled{opacity:.5;cursor:not-allowed}",
       ".rag2-stop{border:1px solid rgba(120,130,150,.4);background:transparent;color:inherit;border-radius:10px;height:42px;padding:0 11px;cursor:pointer;flex-shrink:0}",
       ".rag2-powered{text-align:center;padding:7px 10px 9px;border-top:1px solid rgba(120,130,150,.18);font-size:11px;opacity:.7;text-decoration:none;color:inherit;flex-shrink:0}",
       ".rag2-jump{align-self:center;border:1px solid rgba(120,130,150,.4);background:var(--rag2-head);color:#fff;font-size:11px;font-family:ui-monospace,Menlo,monospace;padding:4px 9px;border-radius:999px;cursor:pointer;position:sticky;bottom:0}",
-      ".rag2-launch{display:flex;align-items:center;gap:9px;border:1px solid rgba(0,0,0,.15);border-radius:999px;cursor:pointer;box-shadow:0 14px 40px rgba(0,0,0,.28);font-weight:700;font-size:14px;background:var(--rag2-accent);color:var(--rag2-accent-text);padding:0 16px 0 6px}",
+      ".rag2-launch{display:flex;align-items:center;gap:9px;border:1px solid rgba(0,0,0,.15);border-radius:999px;cursor:pointer;box-shadow:0 14px 40px rgba(0,0,0,.30);font-weight:700;font-size:14px;background:var(--rag2-accent);color:var(--rag2-accent-text);padding:0 16px 0 6px}",
+      ".rag2-ready .rag2-launch{animation:rag2pop .28s ease}",
+      "@keyframes rag2pop{from{opacity:0;transform:scale(.92) translateY(6px)}to{opacity:1;transform:none}}",
       ".rag2-launch.circle{padding:0;width:56px;justify-content:center}",
-      ".rag2-launch-icon{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.28);display:grid;place-items:center;font-size:12px;font-weight:800;overflow:hidden;flex-shrink:0}",
-      ".rag2-launch-icon img{width:100%;height:100%;object-fit:cover}",
+      ".rag2-launch-icon{width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.28);display:grid;place-items:center;font-size:12px;font-weight:800;overflow:hidden;flex-shrink:0}",
+      ".rag2-launch-icon img{width:100%;height:100%;object-fit:contain}",
       ".rag2-launch-dot{width:8px;height:8px;border-radius:50%;background:#34d399;flex-shrink:0}",
       "@media (max-width:520px){#" + root.id + "{left:12px;right:12px;bottom:12px}.rag2-panel{width:calc(100vw - 24px);height:calc(100dvh - 96px);margin-bottom:10px;border-radius:18px 18px 0 0}.rag2-handle{display:block;width:36px;height:4px;border-radius:999px;background:rgba(120,130,150,.45);margin:8px auto 0;flex-shrink:0}}"
     ].join("");
@@ -246,13 +291,25 @@
       if (t === "auto") return window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
       return t === "light" ? "light" : "dark";
     }
-    function setLogo(target) {
+    function setLogo(target, kind) {
       target.innerHTML = "";
+      target.style.padding = "0";
       if (state.config.logo_url) {
         var img = document.createElement("img"); img.alt = ""; img.referrerPolicy = "no-referrer"; img.src = state.config.logo_url;
-        img.onerror = function () { target.textContent = state.config.icon_label || "AI"; };
+        img.style.objectFit = "contain";
+        img.onerror = function () {
+          target.style.background = kind === "launch" ? "rgba(255,255,255,.28)" : "var(--rag2-accent)";
+          target.style.borderRadius = kind === "launch" ? "50%" : "10px";
+          target.style.padding = "0";
+          target.textContent = state.config.icon_label || "AI";
+        };
+        target.style.background = "#ffffff";
+        target.style.borderRadius = "10px";
+        target.style.padding = "3px";
         target.appendChild(img); return;
       }
+      target.style.background = kind === "launch" ? "rgba(255,255,255,.28)" : "var(--rag2-accent)";
+      target.style.borderRadius = kind === "launch" ? "50%" : "10px";
       target.textContent = state.config.icon_label || "AI";
     }
     function timeNow() { var d = new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
@@ -279,11 +336,11 @@
     panel.innerHTML =
       '<div class="rag2-topbar"></div><div class="rag2-handle"></div>' +
       '<div class="rag2-head"><div class="rag2-mark"></div><div><h3></h3><p><span class="rag2-dot"></span><span class="rag2-sub">Answers from your documents</span></p></div>' +
-      '<div class="rag2-hbtn"><button type="button" class="rag2-new">New chat</button><button type="button" class="rag2-close" aria-label="Close chat">Close</button></div></div>' +
+      '<div class="rag2-hbtn"><button type="button" class="rag2-sound" aria-label="Toggle message sound">Sound on</button><button type="button" class="rag2-new">New chat</button><button type="button" class="rag2-close" aria-label="Close chat">Close</button></div></div>' +
       '<div class="rag2-msgs" aria-live="polite"></div>' +
       '<div class="rag2-status" hidden></div>' +
       '<form class="rag2-foot"><textarea class="rag2-input" rows="1" autocomplete="off" aria-label="Type your message"></textarea>' +
-      '<button type="button" class="rag2-stop" hidden>Stop</button><button class="rag2-send" type="submit">Send</button></form>' +
+      '<button type="button" class="rag2-stop" hidden>Stop</button><button class="rag2-send" type="submit" aria-label="Send message">\u2191</button></form>' +
       '<a class="rag2-powered" href="https://ragora.ai" target="_blank" rel="noopener noreferrer">Powered by Ragora</a>';
     root.appendChild(panel);
     var msgsEl = panel.querySelector(".rag2-msgs");
@@ -319,19 +376,22 @@
     function setThemeAndBrand() {
       var dark = resolveTheme() === "dark";
       panel.classList.toggle("dark", dark);
-      var accent = isHex(state.config.accent_color) ? state.config.accent_color : "#38bdf8";
-      var head = isHex(state.config.secondary_color) ? state.config.secondary_color : "#0f172a";
+      var accent = isHex(state.config.accent_color) ? state.config.accent_color : "#E8490F";
+      var head = isHex(state.config.secondary_color) ? state.config.secondary_color : "#161513";
       root.style.setProperty("--rag2-accent", accent);
       root.style.setProperty("--rag2-head", head);
       root.style.setProperty("--rag2-accent-text", readableText(accent));
       root.style.setProperty("--rag2-radius", clamp(state.config.border_radius, 0, 28) + "px");
-      root.className = state.config.position === "bottom-left" ? "rag2-left" : "rag2-right";
+      root.classList.remove("rag2-left", "rag2-right");
+      root.classList.add(state.config.position === "bottom-left" ? "rag2-left" : "rag2-right");
+      root.classList.add("rag2-ready");
+      root.style.visibility = "visible";
       panel.querySelector("h3").textContent = state.config.title;
       var sub = panel.querySelector(".rag2-sub");
       if (sub) sub.textContent = state.config.company_name ? state.config.company_name + " - Answers from your documents" : "Answers from your documents";
       panel.setAttribute("aria-label", state.config.title);
       inputEl.placeholder = state.config.input_placeholder || "Ask a question";
-      setLogo(panel.querySelector(".rag2-mark"));
+      setLogo(panel.querySelector(".rag2-mark"), "mark");
       var circle = state.config.launcher_style === "circle";
       launcher.classList.toggle("circle", circle);
       var size = circle ? clamp(state.config.launcher_circle_size, 44, 96) : clamp(state.config.launcher_pill_size, 44, 80);
@@ -339,13 +399,21 @@
       if (circle) launcher.style.width = size + "px";
       launcher.querySelector(".rag2-launch-label").textContent = circle ? "" : (state.config.launcher_label || "Chat with AI");
       launcher.querySelector(".rag2-launch-label").style.display = circle ? "none" : "";
-      setLogo(launcher.querySelector(".rag2-launch-icon"));
+      setLogo(launcher.querySelector(".rag2-launch-icon"), "launch");
       launcher.setAttribute("aria-label", state.open ? "Close chat" : "Open chat: " + state.config.title);
+      var snd = panel.querySelector(".rag2-sound");
+      if (snd) snd.textContent = soundOn ? "Sound on" : "Sound off";
     }
     function openChat() { state.open = true; setUnread(0); panel.classList.add("open"); launcher.setAttribute("aria-expanded", "true"); launcher.setAttribute("aria-label", "Close chat"); inputEl.focus(); }
     function closeChat() { state.open = false; panel.classList.remove("open"); launcher.setAttribute("aria-expanded", "false"); setThemeAndBrand(); }
     function toggleChat() { state.open ? closeChat() : openChat(); }
     launcher.onclick = toggleChat;
+    panel.querySelector(".rag2-sound").onclick = function () {
+      soundOn = !soundOn;
+      try { localStorage.setItem(soundKey, soundOn ? "1" : "0"); } catch (e) {}
+      panel.querySelector(".rag2-sound").textContent = soundOn ? "Sound on" : "Sound off";
+      if (soundOn) playSound("receive");
+    };
     panel.querySelector(".rag2-close").onclick = closeChat;
     panel.querySelector(".rag2-new").onclick = function () {
       state.messages = []; try { localStorage.removeItem(storeKey); } catch (e) {}
@@ -475,6 +543,7 @@
       var userMsg = { role: "user", text: text, ts: timeNow(), day: todayISO() };
       state.messages.push(userMsg); saveMessages();
       addMessage(userMsg, { forceScroll: true });
+      playSound("send");
       var botMsg = { role: "bot", text: "", sources: [], ts: timeNow(), day: todayISO() };
       var botNode = addMessage(botMsg, { forceScroll: true });
       var bodyEl = botNode.querySelector(".rag2-body");
@@ -488,13 +557,29 @@
       stopBtn.onclick = function () { stopped = true; if (controller) controller.abort(); };
 
       var renderTimer = null, dirty = false;
+      function renderStreaming() {
+        bodyEl.innerHTML = esc(botMsg.text).replace(/\n/g, "<br>");
+        var cur = document.createElement("span"); cur.className = "rag2-cursor"; bodyEl.appendChild(cur);
+        ensureSources();
+      }
+      function ensureSources() {
+        var old = botNode.querySelector(".rag2-src"); if (old) old.remove();
+        if (!botMsg.sources || !botMsg.sources.length) return;
+        var det = document.createElement("details"); det.className = "rag2-src";
+        var sum = document.createElement("summary"); sum.textContent = "Sources (" + botMsg.sources.length + ")";
+        det.appendChild(sum);
+        botMsg.sources.forEach(function (src) {
+          var a = document.createElement("span"); a.textContent = src; a.style.display = "inline-block"; a.style.fontSize = "11px"; a.style.border = "1px solid rgba(120,130,150,.35)"; a.style.borderRadius = "999px"; a.style.padding = "3px 8px"; a.style.margin = "4px 4px 0 0";
+          det.appendChild(a);
+        });
+        botNode.appendChild(det);
+      }
       function flush() {
         if (!dirty) return; dirty = false;
-        renderMessageNode(botNode, botMsg);
-        var cur = document.createElement("span"); cur.className = "rag2-cursor"; bodyEl.appendChild(cur);
+        renderStreaming();
         scrollToBottom(false);
       }
-      function queueRender() { dirty = true; if (!renderTimer) renderTimer = setTimeout(function () { renderTimer = null; flush(); }, 40); }
+      function queueRender() { dirty = true; if (!renderTimer) renderTimer = setTimeout(function () { renderTimer = null; flush(); }, 60); }
 
       fetch(apiBase + "/widgets/" + encodeURIComponent(widgetId) + "/chat", {
         method: "POST",
@@ -518,36 +603,50 @@
         var decoder = new TextDecoder();
         var buffer = "";
         var gotFirstToken = false;
+        var streamDone = false, streamError = null;
+        function dispatchEvent(eventText) {
+          var lines = eventText.split("\n");
+          var eventName = null, dataLines = [];
+          lines.forEach(function (line) {
+            if (line.indexOf("event:") === 0) eventName = line.slice(6).trim();
+            else if (line.indexOf("data:") === 0) dataLines.push(line.slice(5).replace(/^ /, ""));
+          });
+          if (!dataLines.length) return;
+          var data = dataLines.join("\n");
+          if (data === "[DONE]" || eventName === "done") { streamDone = true; return; }
+          if (eventName === "sources") {
+            try { botMsg.sources = JSON.parse(data) || []; } catch (e) {}
+            setStatus("Generating answer...");
+            ensureSources();
+            return;
+          }
+          if (eventName === "error") { streamError = data.replace(/^"|"$/g, ""); return; }
+          var parsed;
+          try { parsed = JSON.parse(data); } catch (e) { return; }
+          var token = null;
+          if (typeof parsed === "string") token = parsed;
+          else if (parsed && typeof parsed === "object") token = parsed.content || parsed.answer || parsed.text || null;
+          if (token) {
+            if (!gotFirstToken) { gotFirstToken = true; setStatus("Generating answer..."); }
+            botMsg.text += token; queueRender();
+          }
+        }
         function pump() {
           return reader.read().then(function (chunk) {
-            if (chunk.done) { finish(false); return; }
+            if (streamDone) { try { reader.cancel(); } catch (e) {} finish(false); return; }
+            if (streamError) throw new Error(streamError);
+            if (chunk.done) {
+              if (buffer.trim()) dispatchEvent(buffer);
+              if (streamError) throw new Error(streamError);
+              finish(false); return;
+            }
             buffer += decoder.decode(chunk.value, { stream: true });
+            buffer = buffer.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
             var events = buffer.split("\n\n");
             buffer = events.pop() || "";
-            events.forEach(function (eventText) {
-              var lines = eventText.split("\n");
-              var eventName = null, dataLines = [];
-              lines.forEach(function (line) {
-                if (line.indexOf("event: ") === 0) eventName = line.slice(7).trim();
-                else if (line.indexOf("data: ") === 0) dataLines.push(line.slice(6));
-              });
-              if (!dataLines.length) return;
-              var data = dataLines.join("\n");
-              if (data === "[DONE]") return;
-              if (eventName === "sources") {
-                try { botMsg.sources = JSON.parse(data) || []; } catch (e) {}
-                setStatus("Generating answer...");
-                renderMessageNode(botNode, botMsg);
-                return;
-              }
-              if (eventName === "error") throw new Error(data.replace(/^"|"$/g, ""));
-              var parsed;
-              try { parsed = JSON.parse(data); } catch (e) { return; }
-              if (typeof parsed === "string") {
-                if (!gotFirstToken) { gotFirstToken = true; setStatus("Generating answer..."); }
-                botMsg.text += parsed; queueRender();
-              }
-            });
+            events.forEach(dispatchEvent);
+            if (streamDone) { try { reader.cancel(); } catch (e) {} finish(false); return; }
+            if (streamError) throw new Error(streamError);
             return pump();
           });
         }
@@ -555,8 +654,6 @@
       }).catch(function (err) {
         if (stopped || (err && err.name === "AbortError")) {
           botMsg.text = (botMsg.text || "") + (botMsg.text ? "\n\n(Stopped.)" : "Stopped.");
-          state.messages.push(botMsg); saveMessages();
-          renderMessageNode(botNode, botMsg);
           finish(false); return;
         }
         setStatus(null);
@@ -568,15 +665,17 @@
         setStreaming(false);
       });
 
+      var finished = false;
       function finish(fromJson) {
+        if (finished) return; finished = true;
         if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
-        flush();
         if (!fromJson && botMsg.text) { state.messages.push(botMsg); saveMessages(); }
         if (!fromJson && !botMsg.text) botNode.remove();
-        renderMessageNode(botNode, botMsg);
+        if (botMsg.text || fromJson) renderMessageNode(botNode, botMsg);
         setStatus(null); setStreaming(false); showJumpButton();
         if (botMsg.text && !state.open) setUnread(unreadCount + 1);
         if (botMsg.text) {
+          if (!stopped) playSound("receive");
           showFollowups();
           if (LEAD_RE.test(text)) showLeadCard(text);
         }

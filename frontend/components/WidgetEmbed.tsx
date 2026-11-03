@@ -115,7 +115,7 @@ function LogoMark({ form, className }: { form: WidgetForm; className?: string })
   const logoUrl = form.logo_url.trim();
   const showImage = logoUrl && failedUrl !== logoUrl;
   return showImage ? (
-    <img src={logoUrl} alt="" className={className ?? "h-full w-full object-cover"} onError={() => setFailedUrl(logoUrl)} />
+    <img src={logoUrl} alt="" className={className ?? "h-full w-full object-contain bg-white p-1"} onError={() => setFailedUrl(logoUrl)} />
   ) : (
     <>{form.icon_label || "AI"}</>
   );
@@ -233,7 +233,7 @@ function WidgetPreview({ form }: { form: WidgetForm }) {
             {isMobile && <div className="mx-auto mt-2 h-1 w-9 rounded-full" style={{ background: isDark ? "#262C36" : "#D8D2C4" }} />}
             <div style={{ height: 4, background: form.accent_color }} />
             <div className="flex items-center gap-3 px-4 py-3" style={{ background: form.secondary_color, color: headerText }}>
-              <div className="grid h-9 w-9 place-items-center overflow-hidden rounded-lg text-xs font-bold" style={{ background: form.accent_color, color: accentText }}>
+              <div className="grid h-11 w-11 place-items-center overflow-hidden rounded-lg text-xs font-bold" style={{ background: form.logo_url ? "#ffffff" : form.accent_color, color: accentText }}>
                 <LogoMark form={form} />
               </div>
               <div className="min-w-0">
@@ -313,7 +313,7 @@ function WidgetPreview({ form }: { form: WidgetForm }) {
               style={{
                 width: Math.max(30, Math.round(activeLauncherSize * 0.62)),
                 height: Math.max(30, Math.round(activeLauncherSize * 0.62)),
-                background: "rgba(255,255,255,0.38)",
+                background: form.logo_url ? "#ffffff" : "rgba(255,255,255,0.38)",
               }}
             >
               {form.logo_url ? <LogoMark form={form} /> : <MessageCircle size={Math.max(16, Math.round(activeLauncherSize * 0.3))} />}
@@ -322,7 +322,7 @@ function WidgetPreview({ form }: { form: WidgetForm }) {
           </div>
         )}
       </div>
-      <p className="mt-2 text-xs leading-5 text-slate-500">The streaming demo types a real sample answer in the preview. It does not call your backend - it only shows how streaming will feel on a live site.</p>
+      <p className="mt-2 text-xs leading-5 text-slate-500">The streaming demo types a real sample answer in the preview. It does not call your backend - it only shows how streaming will feel on a live site. On a live site the widget now plays a soft sound on send and on a new answer, with a Sound on/off button in the chat header that remembers the visitor&apos;s choice.</p>
     </div>
   );
 }
@@ -372,6 +372,7 @@ function TestGuide() {
     "Reload the page. Your conversation should come back.",
     "Shrink to phone width. The panel should become a bottom sheet, not cover the whole page.",
     "Ask about price or a demo with lead capture on. A lead card should appear after the answer.",
+    "Check sound: send a message (soft blip) and wait for the answer (soft chime). Tap Sound in the chat header to mute - reload and it should stay muted.",
   ];
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.045] p-4">
@@ -590,7 +591,7 @@ export function WidgetEmbed({ userId }: Props) {
               <button
                 type="button"
                 className="group relative grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-lg border border-white/10 text-sm font-bold text-white"
-                style={{ background: form.accent_color || "var(--accent)" }}
+                style={{ background: form.logo_url ? "#ffffff" : (form.accent_color || "var(--accent)") }}
                 onClick={() => logoInputRef.current?.click()}
                 aria-label="Upload widget logo"
               >
