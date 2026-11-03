@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Bot, Check, Copy, Loader2, MessageCircle, Palette, Sparkles, SlidersHorizontal, UploadCloud, X } from "lucide-react";
 import type { WidgetConfig } from "@/lib/api";
 import { API_BASE_URL, checkApiHealth, getWidget, saveWidget, uploadWidgetLogo } from "@/lib/api";
@@ -44,6 +45,13 @@ const TEMPLATES = [
   { name: "Sales Assistant", role: "sales_assistant", goal: "Qualify leads, explain offerings, answer product questions, and encourage visitors to book a demo.", welcome: "Hi. I can help you find the right solution or book a demo.", fallback: "I do not have that detail yet. I can collect your contact details for the sales team.", color: "#0F766E" },
   { name: "Support Desk", role: "technical_support", goal: "Troubleshoot common product issues, ask clarifying questions, and escalate when the answer is not available.", welcome: "Hi. Tell me what is not working and I will help troubleshoot.", fallback: "I do not have a documented fix for that yet. Please share the error and contact details.", color: "#D97706" },
   { name: "Company FAQ", role: "internal_knowledge_base", goal: "Answer company, service, pricing, policy, and process FAQs.", welcome: "Hi. Ask me anything from this company's FAQ and documents.", fallback: "I do not know that from the available information yet.", color: "#2E9E6B" },
+];
+
+const THEME_PRESETS = [
+  { name: "Ragora Paper", theme: "light" as const, accent: "#E8490F", secondary: "#161513", note: "Warm paper, burnt orange" },
+  { name: "Midnight", theme: "dark" as const, accent: "#FF6B2C", secondary: "#0C0E11", note: "Dark, bright orange" },
+  { name: "Forest", theme: "light" as const, accent: "#2E7D5B", secondary: "#1E2A24", note: "Calm green, light panel" },
+  { name: "Ocean", theme: "light" as const, accent: "#0F766E", secondary: "#0F2A26", note: "Teal, light panel" },
 ];
 
 const PRESET_LOGOS = [
@@ -229,7 +237,7 @@ function WidgetPreview({ form }: { form: WidgetForm }) {
               borderColor: botBorder,
               background: panelBg,
               color: panelText,
-              borderRadius: isMobile ? "18px 18px 0 0" : form.border_radius,
+              borderRadius: isMobile ? "18px 18px 0 0" : form.border_radius, transition: "background .25s, color .25s",
             }}
           >
             {isMobile && <div className="mx-auto mt-2 h-1 w-9 rounded-full" style={{ background: isDark ? "#262C36" : "#D8D2C4" }} />}
@@ -298,7 +306,7 @@ function WidgetPreview({ form }: { form: WidgetForm }) {
             <div className="flex items-center justify-center px-3 pb-2.5 pt-2" style={{ borderTop: `1px solid ${botBorder}` }}>
               <div className="inline-flex min-h-7 items-center gap-1.5 text-[11px] leading-none opacity-70">
                 <span className="grid h-5 w-5 place-items-center rounded-md text-[11px] font-black text-white" style={{ background: form.accent_color, color: accentText }}>R</span>
-                <span>Powered by Ragora</span>
+                <a href="https://ragora-ai.vercel.app" target="_blank" rel="noreferrer" className="hover:underline">Powered by Ragora</a>
               </div>
             </div>
           </div>
@@ -404,6 +412,14 @@ export function WidgetEmbed({ userId }: Props) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [stepDirection, setStepDirection] = useState(1);
+  const [savedFlash, setSavedFlash] = useState(false);
+  function goStep(n: 1 | 2 | 3) { setStepDirection(n > step ? 1 : -1); setStep(n); }
+  const stepDone = [
+    Boolean(form.title.trim() && form.welcome_message.trim()),
+    Boolean(form.bot_goal.trim() && form.fallback_message.trim()),
+    Boolean(widget?.embed_script),
+  ];
   const [mobileView, setMobileView] = useState<"edit" | "preview">("edit");
   const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
@@ -426,7 +442,7 @@ export function WidgetEmbed({ userId }: Props) {
   async function handleSave() {
     if (!form.title.trim()) {
       setError("Give the widget a title first, in Step 1. It shows at the top of the chat window.");
-      setStep(1);
+      goStep(1);
       return;
     }
     setIsSaving(true);
@@ -454,6 +470,8 @@ export function WidgetEmbed({ userId }: Props) {
       setForm(nextForm);
       setSavedSnapshot(JSON.stringify(nextForm));
       setSavedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+      setSavedFlash(true);
+      window.setTimeout(() => setSavedFlash(false), 2600);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save widget");
     } finally {
@@ -571,28 +589,37 @@ export function WidgetEmbed({ userId }: Props) {
             <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 500 }}>{form.is_enabled ? "Live" : "Paused"}</span>
           </label>
           <button type="button" onClick={handleSave} disabled={isSaving} className="btn-accent inline-flex h-10 items-center gap-2 px-4">
-            {isSaving ? <Loader2 size={15} className="animate-spin" /> : null}
-            {isSaving ? "Saving…" : isDirty ? "Save changes" : "Save"}
+            {isSaving ? <Loader2 size={15} className="animate-spin" /> : savedFlash ? <Check size={15} /> : null}
+            {isSaving ? "Saving…" : savedFlash ? "Saved ✓" : isDirty ? "Save changes" : "Save"}
           </button>
         </div>
       </div>
       {error && <div className="notice-error mb-5" role="alert">{error}</div>}
+      {savedFlash && <div className="notice-success mb-5">Saved. Every embed updates at once, no code change needed on your site.</div>}
       {/* Steps, like Chatbase / Fin / Botpress: Look, Behaviour, Publish. */}
       <nav className="mb-5 flex gap-1 rounded-lg border border-white/10 bg-white/[0.04] p-1" aria-label="Builder steps">
         {([{ n: 1, label: "Look", hint: "Logo, colours, launcher" }, { n: 2, label: "Behaviour", hint: "Role, tone, fallback" }, { n: 3, label: "Publish", hint: "Checklist, embed code" }] as const).map((s) => (
           <button
             key={s.n}
             type="button"
-            onClick={() => setStep(s.n)}
+            onClick={() => goStep(s.n)}
             aria-current={step === s.n ? "step" : undefined}
             className="flex-1 rounded-md px-3 py-2 text-left"
             style={{ background: step === s.n ? "#fff" : "transparent", color: step === s.n ? "#0C0E11" : "var(--text-secondary)" }}
           >
-            <span className="block text-xs font-bold">Step {s.n} - {s.label}</span>
+            <span className="flex items-center gap-2">
+              <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-bold" style={{ background: stepDone[s.n - 1] ? "#2E9E6B" : step === s.n ? "#E8490F" : "rgba(255,255,255,0.12)", color: "#fff" }}>
+                {stepDone[s.n - 1] ? "✓" : s.n}
+              </span>
+              <span className="block text-xs font-bold">Step {s.n} - {s.label}</span>
+            </span>
             <span className="mt-0.5 hidden text-[11px] sm:block" style={{ color: step === s.n ? "#4b5563" : "var(--text-tertiary)" }}>{s.hint}</span>
           </button>
         ))}
       </nav>
+      <div className="mb-5 h-1.5 overflow-hidden rounded-full bg-white/10" aria-hidden>
+        <motion.div className="h-full" style={{ background: "#E8490F" }} animate={{ width: `${(step / 3) * 100}%` }} transition={{ duration: 0.35, ease: "easeOut" }} />
+      </div>
       {/* Mobile: Edit / Preview switch, so the preview is not a long scroll away. */}
       <div className="mb-5 flex gap-1 rounded-lg border border-white/10 bg-white/[0.04] p-1 xl:hidden" aria-label="Edit or preview">
         {(["edit", "preview"] as const).map((v) => (
@@ -603,7 +630,8 @@ export function WidgetEmbed({ userId }: Props) {
       </div>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
       <div className={`flex-col gap-3 ${mobileView === "preview" ? "hidden xl:flex" : "flex"}`}>
-        {step === 1 && (<>
+        <AnimatePresence mode="wait">
+        {step === 1 && (<motion.div key="look" initial={{ opacity: 0, x: stepDirection * 24, y: 6 }} animate={{ opacity: 1, x: 0, y: 0 }} exit={{ opacity: 0, x: stepDirection * -24 }} transition={{ duration: 0.28, ease: "easeOut" }}>
         {/* Templates */}
         <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
@@ -635,6 +663,24 @@ export function WidgetEmbed({ userId }: Props) {
 
         {/* Appearance */}
         <Section icon={Palette} title="Appearance" description="Brand, launcher, placement, and first impression.">
+          <div>
+            <p className="mb-2 text-xs font-semibold text-slate-300">Theme presets - one tap sets mode, accent and header together. The preview updates instantly.</p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {THEME_PRESETS.map((preset) => {
+                const active = form.theme === preset.theme && form.accent_color.toLowerCase() === preset.accent.toLowerCase() && form.secondary_color.toLowerCase() === preset.secondary.toLowerCase();
+                return (
+                  <button key={preset.name} type="button" onClick={() => setForm({ ...form, theme: preset.theme, accent_color: preset.accent, secondary_color: preset.secondary })} className="rounded-lg border p-2 text-left transition hover:-translate-y-0.5" style={{ borderColor: active ? "#E8490F" : "rgba(255,255,255,0.1)", background: "var(--surface-0)" }} aria-pressed={active}>
+                    <span className="mb-2 flex h-8 items-center gap-1.5 rounded-md px-2" style={{ background: preset.secondary }}>
+                      <span className="h-3 w-3 rounded-full" style={{ background: preset.accent }} />
+                      <span className="h-2 w-8 rounded-full bg-white/70" />
+                    </span>
+                    <span className="block text-xs font-semibold text-white">{preset.name}{active ? " ✓" : ""}</span>
+                    <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">{preset.note}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           {/* Logo */}
           <div className="rounded-lg border border-white/10 bg-slate-950/40 p-3">
             <input
@@ -828,8 +874,8 @@ export function WidgetEmbed({ userId }: Props) {
           </div>
         </Section>
 
-        </>)}
-        {step === 2 && (<>
+        </motion.div>)}
+        {step === 2 && (<motion.div key="behaviour" initial={{ opacity: 0, x: stepDirection * 24, y: 6 }} animate={{ opacity: 1, x: 0, y: 0 }} exit={{ opacity: 0, x: stepDirection * -24 }} transition={{ duration: 0.28, ease: "easeOut" }}>
         {/* Behavior */}
         <Section icon={Bot} title="Behavior" description="Control how the assistant answers and escalates.">
           <select className="inp" value={form.bot_role} onChange={(e) => setForm({ ...form, bot_role: e.target.value })}>
@@ -859,8 +905,8 @@ export function WidgetEmbed({ userId }: Props) {
           </label>
         </Section>
 
-        </>)}
-        {step === 3 && (<>
+        </motion.div>)}
+        {step === 3 && (<motion.div key="publish" initial={{ opacity: 0, x: stepDirection * 24, y: 6 }} animate={{ opacity: 1, x: 0, y: 0 }} exit={{ opacity: 0, x: stepDirection * -24 }} transition={{ duration: 0.28, ease: "easeOut" }}>
           <BuilderChecklist form={form} widget={widget} />
           <TestGuide />
         {/* Embed code */}
@@ -901,7 +947,28 @@ export function WidgetEmbed({ userId }: Props) {
               <p className="mt-1 text-xs leading-5 text-slate-400">Save from the top bar, then come back to Step 3. Paste the script once, just before &lt;/body&gt;, on every page where the widget should appear.</p>
             </div>
           )}
-        </>)}
+        </motion.div>)}
+        </AnimatePresence>
+        <div className="mt-2 flex items-center justify-between gap-2 border-t border-white/10 pt-4">
+          <button type="button" onClick={() => step > 1 && goStep((step - 1) as 1 | 2 | 3)} disabled={step === 1} className="btn-ghost h-10 px-4 font-semibold disabled:opacity-40">
+            ← Back
+          </button>
+          <span className="text-xs text-slate-500">Step {step} of 3</span>
+          {step < 3 ? (
+            <button type="button" onClick={() => goStep((step + 1) as 1 | 2 | 3)} className="btn-accent h-10 px-4">
+              Next: {step === 1 ? "Behaviour" : "Publish"} →
+            </button>
+          ) : widget?.embed_script ? (
+            <button type="button" onClick={copyScript} className="btn-accent inline-flex h-10 items-center gap-2 px-4">
+              {copied ? <Check size={14} /> : <Copy size={14} />}
+              {copied ? "Copied!" : "Copy embed code"}
+            </button>
+          ) : (
+            <button type="button" onClick={handleSave} disabled={isSaving} className="btn-accent h-10 px-4">
+              {isSaving ? "Saving…" : "Save to get embed code"}
+            </button>
+          )}
+        </div>
       </div>
       <div className={`flex-col gap-4 xl:sticky xl:top-4 xl:self-start ${mobileView === "edit" ? "hidden xl:flex" : "flex"}`}>
         <WidgetPreview form={form} />

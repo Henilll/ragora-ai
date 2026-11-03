@@ -220,19 +220,23 @@
       "#" + root.id + ".rag2-right{right:20px;align-items:flex-end}",
       "#" + root.id + " *{box-sizing:border-box}",
       ".rag2-panel{width:min(400px,calc(100vw - 24px));height:min(640px,calc(100vh - 100px));margin-bottom:12px;border:1px solid rgba(120,130,150,.32);border-radius:var(--rag2-radius);overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.38);display:none;flex-direction:column;background:#FFFEFA;color:#161513}",
-      ".rag2-panel.open{display:flex;animation:rag2in .22s ease}",
-      "@keyframes rag2in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}",
-      ".rag2-launch:hover{transform:translateY(-1px)}",
+      ".rag2-panel.open{display:flex;animation:rag2in .3s cubic-bezier(.22,1,.36,1)}",
+      "@keyframes rag2in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}",
+      "@keyframes rag2msg{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}",
+      "@keyframes rag2sheet{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:none}}",
+      "@keyframes rag2pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}",
+      ".rag2-launch{transition:transform .18s ease,box-shadow .18s ease}.rag2-launch:hover{transform:translateY(-2px);box-shadow:0 18px 44px rgba(0,0,0,.35)}.rag2-launch:active{transform:scale(.97)}",
       ".rag2-launch{position:relative}",
-      ".rag2-unread{position:absolute;top:-6px;right:-6px;min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:#E8490F;color:#fff;font-size:11px;font-weight:800;display:none;place-items:center;border:2px solid #fff}",
+      ".rag2-unread{position:absolute;top:-6px;right:-6px;min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:#E8490F;color:#fff;font-size:11px;font-weight:800;display:none;place-items:center;border:2px solid #fff;animation:rag2pulse 1.6s ease infinite}",
       ".rag2-day{align-self:center;font-family:ui-monospace,Menlo,monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;opacity:.65;border:1px solid rgba(120,130,150,.35);padding:3px 9px;border-radius:999px}",
       ".rag2-typing i{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--rag2-accent);margin-right:3px;animation:rag2typing 1s infinite}",
       ".rag2-typing i:nth-child(2){animation-delay:.15s}.rag2-typing i:nth-child(3){animation-delay:.3s}",
       "@keyframes rag2typing{0%,100%{opacity:.3}50%{opacity:1}}",
       ".rag2-handle{display:none}",
       ".rag2-panel:not(.dark) .rag2-bot{background:#fff;border:1px solid rgba(120,130,150,.22);border-left:3px solid var(--rag2-accent)}",
+      ".rag2-panel:not(.dark) .rag2-msg{box-shadow:0 1px 3px rgba(0,0,0,.08)}",
       ".rag2-chip:focus-visible,.rag2-input:focus-visible,.rag2-send:focus-visible,.rag2-stop:focus-visible,.rag2-launch:focus-visible{outline:2px solid var(--rag2-accent);outline-offset:2px}",
-      "@media (prefers-reduced-motion:reduce){.rag2-panel.open{animation:none}.rag2-cursor{animation:none}.rag2-typing i{animation:none}.rag2-launch:hover{transform:none}}",
+      "@media (prefers-reduced-motion:reduce){.rag2-panel.open{animation:none}.rag2-cursor{animation:none}.rag2-typing i{animation:none}.rag2-launch:hover{transform:none}.rag2-msg{animation:none}.rag2-unread{animation:none}}",
       ".rag2-panel.dark{background:#0C0E11;color:#F2EFE7}",
       ".rag2-topbar{height:4px;background:var(--rag2-accent);flex-shrink:0}",
       ".rag2-head{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--rag2-head);color:#fff;flex-shrink:0}",
@@ -252,9 +256,9 @@
       ".rag2-welcome{border:1px solid rgba(120,130,150,.28);border-radius:10px;padding:12px;background:rgba(120,130,150,.08)}",
       ".rag2-welcome p{margin:0;font-size:14px;line-height:1.55}",
       ".rag2-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}",
-      ".rag2-chip{border:1px solid rgba(120,130,150,.35);background:transparent;color:inherit;font-size:12.5px;padding:7px 12px;border-radius:999px;cursor:pointer;text-align:left}",
+      ".rag2-chip{border:1px solid rgba(120,130,150,.35);background:transparent;color:inherit;font-size:12.5px;padding:7px 12px;border-radius:999px;cursor:pointer;text-align:left;transition:border-color .15s,color .15s,background .15s}",
       ".rag2-chip:hover{border-color:var(--rag2-accent);color:var(--rag2-accent)}",
-      ".rag2-msg{max-width:88%;padding:10px 12px;border-radius:10px;font-size:14px;line-height:1.55;overflow-wrap:anywhere}",
+      ".rag2-msg{max-width:88%;animation:rag2msg .3s ease;padding:10px 12px;border-radius:10px;font-size:14px;line-height:1.55;overflow-wrap:anywhere}",
       ".rag2-msg p{margin:0 0 8px}.rag2-msg p:last-child{margin-bottom:0}",
       ".rag2-msg h1,.rag2-msg h2,.rag2-msg h3{margin:10px 0 6px;line-height:1.3}",
       ".rag2-msg h1{font-size:17px}.rag2-msg h2{font-size:16px}.rag2-msg h3{font-size:15px}",
@@ -290,6 +294,7 @@
       ".rag2-input{flex:1;min-width:0;border:1px solid rgba(120,130,150,.35);border-radius:10px;background:transparent;color:inherit;padding:9px 11px;font-size:14px;outline:none;resize:none;max-height:110px;font-family:inherit;line-height:1.45}",
       ".rag2-send{border:0;border-radius:50%;background:var(--rag2-accent);color:var(--rag2-accent-text);font-weight:700;font-size:18px;width:42px;height:42px;padding:0;cursor:pointer;flex-shrink:0}",
       ".rag2-send:disabled{opacity:.5;cursor:not-allowed}",
+      ".rag2-send{transition:transform .15s ease}.rag2-send:hover{transform:scale(1.06)}.rag2-send:active{transform:scale(.95)}",
       ".rag2-stop{border:1px solid rgba(120,130,150,.4);background:transparent;color:inherit;border-radius:10px;height:42px;padding:0 11px;cursor:pointer;flex-shrink:0}",
       ".rag2-powered{text-align:center;padding:7px 10px 9px;border-top:1px solid rgba(120,130,150,.18);font-size:11px;opacity:.7;text-decoration:none;color:inherit;flex-shrink:0}",
       ".rag2-jump{align-self:center;border:1px solid rgba(120,130,150,.4);background:var(--rag2-head);color:#fff;font-size:11px;font-family:ui-monospace,Menlo,monospace;padding:4px 9px;border-radius:999px;cursor:pointer;position:sticky;bottom:0}",
@@ -375,7 +380,7 @@
       '<div class="rag2-status" hidden></div>' +
       '<form class="rag2-foot"><textarea class="rag2-input" rows="1" autocomplete="off" aria-label="Type your message"></textarea>' +
       '<button type="button" class="rag2-stop" hidden>Stop</button><button class="rag2-send" type="submit" aria-label="Send message">\u2191</button></form>' +
-      '<a class="rag2-powered" href="https://ragora.ai" target="_blank" rel="noopener noreferrer">Powered by Ragora</a>';
+      '<a class="rag2-powered" href="https://ragora-ai.vercel.app" target="_blank" rel="noopener noreferrer">Powered by Ragora</a>';
     root.appendChild(panel);
     var msgsEl = panel.querySelector(".rag2-msgs");
     var statusEl = panel.querySelector(".rag2-status");
