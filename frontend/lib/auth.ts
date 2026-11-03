@@ -23,7 +23,8 @@ export type AuthSession = {
 
 const SESSION_KEY = "ragora_session";
 const LEGACY_USER_KEY = "rag_user_id";
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const PKCE_STORAGE_ERROR = "PKCE code verifier not found";
 
 async function readError(response: Response) {

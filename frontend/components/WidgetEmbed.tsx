@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Bot, Check, Copy, Loader2, MessageCircle, Palette, Sparkles, SlidersHorizontal, UploadCloud, X } from "lucide-react";
 import type { WidgetConfig } from "@/lib/api";
-import { getWidget, saveWidget, uploadWidgetLogo } from "@/lib/api";
+import { API_BASE_URL, checkApiHealth, getWidget, saveWidget, uploadWidgetLogo } from "@/lib/api";
 
 type Props = { userId: string };
 type WidgetForm = Omit<WidgetConfig, "widget_id" | "embed_script">;
@@ -233,7 +233,7 @@ function WidgetPreview({ form }: { form: WidgetForm }) {
             {isMobile && <div className="mx-auto mt-2 h-1 w-9 rounded-full" style={{ background: isDark ? "#262C36" : "#D8D2C4" }} />}
             <div style={{ height: 4, background: form.accent_color }} />
             <div className="flex items-center gap-3 px-4 py-3" style={{ background: form.secondary_color, color: headerText }}>
-              <div className="grid h-11 w-11 place-items-center overflow-hidden rounded-lg text-xs font-bold" style={{ background: form.logo_url ? "#ffffff" : form.accent_color, color: accentText }}>
+              <div className="grid h-12 w-12 place-items-center overflow-hidden rounded-lg text-xs font-bold" style={{ background: form.logo_url ? "#ffffff" : form.accent_color, color: accentText }}>
                 <LogoMark form={form} />
               </div>
               <div className="min-w-0">
@@ -243,8 +243,13 @@ function WidgetPreview({ form }: { form: WidgetForm }) {
               <span className="ml-auto flex items-center gap-1 font-mono text-[10px] uppercase tracking-wide opacity-75"><span className="h-1.5 w-1.5 rounded-full" style={{ background: "#5EC99A" }} />Online</span>
             </div>
             <div className="space-y-3 p-4">
-              <div className="rounded-lg px-3 py-2 text-xs leading-5" style={{ background: botBubble, border: `1px solid ${botBorder}`, borderLeft: `3px solid ${form.accent_color}` }}>
-                {form.welcome_message || "Hi. Ask me anything from these documents."}
+              <div className="flex items-start gap-2">
+                <div className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-lg text-[11px] font-bold" style={{ background: form.logo_url ? "#ffffff" : form.accent_color, color: accentText }}>
+                  <LogoMark form={form} />
+                </div>
+                <div className="flex-1 rounded-lg px-3 py-2 text-xs leading-5" style={{ background: botBubble, border: `1px solid ${botBorder}`, borderLeft: `3px solid ${form.accent_color}` }}>
+                  {form.welcome_message || "Hi. Ask me anything from these documents."}
+                </div>
               </div>
               {chips.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
@@ -322,7 +327,7 @@ function WidgetPreview({ form }: { form: WidgetForm }) {
           </div>
         )}
       </div>
-      <p className="mt-2 text-xs leading-5 text-slate-500">The streaming demo types a real sample answer in the preview. It does not call your backend - it only shows how streaming will feel on a live site. On a live site the widget now plays a soft sound on send and on a new answer, with a Sound on/off button in the chat header that remembers the visitor&apos;s choice.</p>
+      <p className="mt-2 text-xs leading-5 text-slate-500">The streaming demo types a real sample answer in the preview. It does not call your backend - it only shows how streaming will feel on a live site. On a live site the widget now plays a soft sound on send and on a new answer, with a Sound on/off icon button in the chat header that remembers the visitor&apos;s choice. Bot answers also carry the brand avatar, and a welcome message with &gt; lines no longer shows the &gt; characters.</p>
     </div>
   );
 }
@@ -392,6 +397,8 @@ export function WidgetEmbed({ userId }: Props) {
   const [form, setForm] = useState<WidgetForm>({ user_id: userId, ...DEFAULT_WIDGET });
   const [isSaving, setIsSaving] = useState(false);
   const [isLogoUploading, setIsLogoUploading] = useState(false);
+  const [backendCheck, setBackendCheck] = useState<string | null>(null);
+  const [isCheckingBackend, setIsCheckingBackend] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -448,7 +455,9 @@ export function WidgetEmbed({ userId }: Props) {
 
   async function handleLogoFile(file: File) {
     setError(null);
-    if (!LOGO_TYPES.includes(file.type)) {
+    const logoExt = file.name.split(".").pop()?.toLowerCase() ?? "";
+    const logoExtOk = ["png", "jpg", "jpeg", "webp", "gif", "svg"].includes(logoExt);
+    if (!LOGO_TYPES.includes(file.type) && !logoExtOk) {
       setError("Upload a PNG, JPG, WebP, SVG, or GIF logo.");
       return;
     }
@@ -462,10 +471,27 @@ export function WidgetEmbed({ userId }: Props) {
       const response = await uploadWidgetLogo(file);
       setForm((c) => ({ ...c, logo_url: response.logo_url }));
     } catch (err) {
-      const message = err instanceof TypeError && err.message === "Failed to fetch"
-        ? "Logo upload could not reach the API. Check the backend URL and try again."
-        : err instanceof Error ? err.message : "Logo upload failed.";
-      setError(message);
+      const message = err instanceof Error ? err.message : "Logo upload failed.";
+      // If the API cannot be reached at all, a small file (like an SVG logo)
+      // can still be stored directly in the widget config as a data URL, so
+      // the owner is not blocked by a backend URL problem. Larger files are
+      // not stored this way, or every visitor would download a huge config.
+      if (message.includes("could not reach the API") && file.size <= 100_000) {
+        try {
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.onerror = () => reject(new Error("Could not read the logo file."));
+            reader.readAsDataURL(file);
+          });
+          setForm((c) => ({ ...c, logo_url: dataUrl }));
+          setError("API unreachable, so this logo is stored directly in the widget config (works for small files like SVG). Save the widget to keep it, and fix the backend URL for larger uploads.");
+        } catch {
+          setError(message);
+        }
+      } else {
+        setError(message);
+      }
     } finally {
       setIsLogoUploading(false);
       if (logoInputRef.current) logoInputRef.current.value = "";
@@ -623,6 +649,24 @@ export function WidgetEmbed({ userId }: Props) {
                   )}
                 </div>
                 <p className="mt-2 text-xs leading-5 text-slate-500">Stored in Supabase Storage. PNG, JPG, WebP, SVG, or GIF up to 1 MB.</p>
+                <p className="mt-1 flex flex-wrap items-center gap-2 text-xs leading-5 text-slate-500">
+                  <span className="break-all">Backend API: {API_BASE_URL}</span>
+                  <button
+                    type="button"
+                    disabled={isCheckingBackend}
+                    onClick={async () => {
+                      setIsCheckingBackend(true);
+                      setBackendCheck(null);
+                      const ok = await checkApiHealth();
+                      setBackendCheck(ok ? "Backend reachable." : `Backend unreachable at ${API_BASE_URL}. Check NEXT_PUBLIC_API_BASE_URL in Vercel and redeploy.`);
+                      setIsCheckingBackend(false);
+                    }}
+                    className="rounded-md border border-white/10 px-2 py-1 text-[11px] font-semibold text-slate-200 disabled:opacity-60"
+                  >
+                    {isCheckingBackend ? "Checking..." : "Test connection"}
+                  </button>
+                  {backendCheck && <span>{backendCheck}</span>}
+                </p>
               </div>
             </div>
             <div className="mt-3 grid gap-2 md:grid-cols-[1fr_140px]">

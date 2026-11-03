@@ -730,6 +730,16 @@ async def upload_widget_logo(
     content_type = (file.content_type or "").lower()
     extension = LOGO_CONTENT_TYPES.get(content_type)
     if not extension:
+        # Some browsers send an empty or generic type for SVG files, which
+        # used to fail as 415 even though the file itself was a valid logo.
+        # Fall back to the filename extension in that case only.
+        filename_ext = (file.filename or "").rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else ""
+        extension_by_name = {"png": "png", "jpg": "jpg", "jpeg": "jpg", "webp": "webp", "gif": "gif", "svg": "svg"}
+        content_type_by_name = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp", "gif": "image/gif", "svg": "image/svg+xml"}
+        extension = extension_by_name.get(filename_ext)
+        if extension:
+            content_type = content_type_by_name[filename_ext]
+    if not extension:
         raise HTTPException(status_code=415, detail="Upload a PNG, JPG, WebP, SVG, or GIF logo.")
 
     content = await file.read(MAX_WIDGET_LOGO_BYTES + 1)

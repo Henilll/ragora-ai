@@ -1,4 +1,4 @@
-/* Ragora Widget v4 - drop-in replacement for backend/app/static/widget.js (v2/v3 contract kept)
+/* Ragora Widget v5 - drop-in replacement for backend/app/static/widget.js (v2/v3 contract kept)
  * v4 fixes, from live-site reports:
  * - Position flash: the launcher used to appear on the left, then jump right,
  *   because the root had no left/right class until the config fetch returned.
@@ -16,6 +16,20 @@
  *   full markdown renders once at finish.
  * - Look: bigger brand mark, chat-style bubble corners, round send button,
  *   flat ink/paper panels, default accent burnt orange (was cyan).
+ * v5, from the live portfolio check:
+ * - The live widget title was 'Company FAQ', accent was blue/purple, logo
+ *   was a sparkle image, chips and placeholder were old - all of those are
+ *   saved widget config in Supabase, not widget.js code, so code alone
+ *   cannot change them. v5 therefore ships a proper H logo file to upload
+ *   and exact dashboard values, plus code fixes for what code CAN fix:
+ * - Welcome text with '> ' lines used to show the '>' literally, because
+ *   welcome was set as plain text. v5 strips leading '> ' and renders
+ *   each line as its own paragraph.
+ * - Bot messages now carry a small brand avatar (logo or initials) next
+ *   to the bubble, so the brand is visible in every answer, not only in
+ *   the header. Header buttons are now compact icons, so the title and
+ *   logo are not squeezed on mobile.
+ * - Brand mark is now 48px, launcher icon 42px, messages have more air.
  * v3 adds: unread badge on the launcher, day separators, a typing indicator
  * before the first streamed token, source pills, a mobile drag handle and
  * a paper-light bot bubble. No new backend endpoint, no embed-code change.
@@ -222,18 +236,23 @@
       ".rag2-panel.dark{background:#0C0E11;color:#F2EFE7}",
       ".rag2-topbar{height:4px;background:var(--rag2-accent);flex-shrink:0}",
       ".rag2-head{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--rag2-head);color:#fff;flex-shrink:0}",
-      ".rag2-mark{width:44px;height:44px;flex-shrink:0;display:grid;place-items:center;background:var(--rag2-accent);color:var(--rag2-accent-text);font-weight:800;font-size:14px;border-radius:10px;overflow:hidden}",
+      ".rag2-mark{width:48px;height:48px;flex-shrink:0;display:grid;place-items:center;background:var(--rag2-accent);color:var(--rag2-accent-text);font-weight:800;font-size:14px;border-radius:10px;overflow:hidden}",
       ".rag2-mark img{width:100%;height:100%;object-fit:contain}",
-      ".rag2-head h3{font-size:15px;line-height:1.2;margin:0}",
+      ".rag2-head h3{font-size:16px;line-height:1.2;margin:0}",
       ".rag2-head p{font-size:11px;line-height:1.3;margin:2px 0 0;opacity:.75;font-family:ui-monospace,Menlo,monospace}",
       ".rag2-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#34d399;margin-right:5px}",
       ".rag2-hbtn{margin-left:auto;display:flex;gap:6px}",
       ".rag2-hbtn button{border:1px solid rgba(255,255,255,.35);background:transparent;color:#fff;font-family:ui-monospace,Menlo,monospace;font-size:11px;padding:5px 8px;border-radius:6px;cursor:pointer}",
-      ".rag2-msgs{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px}",
+      ".rag2-msgs{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:12px}",
+      ".rag2-row{display:flex;gap:8px;align-items:flex-start;max-width:96%}",
+      ".rag2-row .rag2-msg{flex:1;min-width:0}",
+      ".rag2-avatar{width:28px;height:28px;flex-shrink:0;display:grid;place-items:center;background:var(--rag2-accent);color:var(--rag2-accent-text);font-weight:800;font-size:11px;border-radius:8px;overflow:hidden;margin-top:2px}",
+      ".rag2-avatar img{width:100%;height:100%;object-fit:contain}",
+      ".rag2-hbtn button{width:32px;height:32px;padding:0;display:grid;place-items:center;border-radius:8px}",
       ".rag2-welcome{border:1px solid rgba(120,130,150,.28);border-radius:10px;padding:12px;background:rgba(120,130,150,.08)}",
       ".rag2-welcome p{margin:0;font-size:14px;line-height:1.55}",
       ".rag2-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}",
-      ".rag2-chip{border:1px solid rgba(120,130,150,.35);background:transparent;color:inherit;font-size:12px;padding:6px 10px;border-radius:999px;cursor:pointer;text-align:left}",
+      ".rag2-chip{border:1px solid rgba(120,130,150,.35);background:transparent;color:inherit;font-size:12.5px;padding:7px 12px;border-radius:999px;cursor:pointer;text-align:left}",
       ".rag2-chip:hover{border-color:var(--rag2-accent);color:var(--rag2-accent)}",
       ".rag2-msg{max-width:88%;padding:10px 12px;border-radius:10px;font-size:14px;line-height:1.55;overflow-wrap:anywhere}",
       ".rag2-msg p{margin:0 0 8px}.rag2-msg p:last-child{margin-bottom:0}",
@@ -278,7 +297,7 @@
       ".rag2-ready .rag2-launch{animation:rag2pop .28s ease}",
       "@keyframes rag2pop{from{opacity:0;transform:scale(.92) translateY(6px)}to{opacity:1;transform:none}}",
       ".rag2-launch.circle{padding:0;width:56px;justify-content:center}",
-      ".rag2-launch-icon{width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.28);display:grid;place-items:center;font-size:12px;font-weight:800;overflow:hidden;flex-shrink:0}",
+      ".rag2-launch-icon{width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.28);display:grid;place-items:center;font-size:12px;font-weight:800;overflow:hidden;flex-shrink:0}",
       ".rag2-launch-icon img{width:100%;height:100%;object-fit:contain}",
       ".rag2-launch-dot{width:8px;height:8px;border-radius:50%;background:#34d399;flex-shrink:0}",
       "@media (max-width:520px){#" + root.id + "{left:12px;right:12px;bottom:12px}.rag2-panel{width:calc(100vw - 24px);height:calc(100dvh - 96px);margin-bottom:10px;border-radius:18px 18px 0 0}.rag2-handle{display:block;width:36px;height:4px;border-radius:999px;background:rgba(120,130,150,.45);margin:8px auto 0;flex-shrink:0}}"
@@ -312,6 +331,21 @@
       target.style.borderRadius = kind === "launch" ? "50%" : "10px";
       target.textContent = state.config.icon_label || "AI";
     }
+    function setAvatar(target) {
+      target.innerHTML = "";
+      if (state.config.logo_url) {
+        var img = document.createElement("img"); img.alt = ""; img.referrerPolicy = "no-referrer"; img.src = state.config.logo_url;
+        img.style.objectFit = "contain";
+        img.onerror = function () {
+          target.style.background = "var(--rag2-accent)";
+          target.textContent = state.config.icon_label || "AI";
+        };
+        target.style.background = "#ffffff";
+        target.appendChild(img); return;
+      }
+      target.style.background = "var(--rag2-accent)";
+      target.textContent = state.config.icon_label || "AI";
+    }
     function timeNow() { var d = new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
     function todayISO() { var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
     function dayLabel(day) {
@@ -336,7 +370,7 @@
     panel.innerHTML =
       '<div class="rag2-topbar"></div><div class="rag2-handle"></div>' +
       '<div class="rag2-head"><div class="rag2-mark"></div><div><h3></h3><p><span class="rag2-dot"></span><span class="rag2-sub">Answers from your documents</span></p></div>' +
-      '<div class="rag2-hbtn"><button type="button" class="rag2-sound" aria-label="Toggle message sound">Sound on</button><button type="button" class="rag2-new">New chat</button><button type="button" class="rag2-close" aria-label="Close chat">Close</button></div></div>' +
+      '<div class="rag2-hbtn"><button type="button" class="rag2-sound" aria-label="Turn sound off" title="Sound on/off"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg></button><button type="button" class="rag2-new" aria-label="New chat" title="New chat"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button><button type="button" class="rag2-close" aria-label="Close chat" title="Close"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div></div>' +
       '<div class="rag2-msgs" aria-live="polite"></div>' +
       '<div class="rag2-status" hidden></div>' +
       '<form class="rag2-foot"><textarea class="rag2-input" rows="1" autocomplete="off" aria-label="Type your message"></textarea>' +
@@ -402,7 +436,7 @@
       setLogo(launcher.querySelector(".rag2-launch-icon"), "launch");
       launcher.setAttribute("aria-label", state.open ? "Close chat" : "Open chat: " + state.config.title);
       var snd = panel.querySelector(".rag2-sound");
-      if (snd) snd.textContent = soundOn ? "Sound on" : "Sound off";
+      if (snd) { snd.style.opacity = soundOn ? "1" : "0.45"; snd.setAttribute("aria-label", soundOn ? "Turn sound off" : "Turn sound on"); }
     }
     function openChat() { state.open = true; setUnread(0); panel.classList.add("open"); launcher.setAttribute("aria-expanded", "true"); launcher.setAttribute("aria-label", "Close chat"); inputEl.focus(); }
     function closeChat() { state.open = false; panel.classList.remove("open"); launcher.setAttribute("aria-expanded", "false"); setThemeAndBrand(); }
@@ -411,7 +445,9 @@
     panel.querySelector(".rag2-sound").onclick = function () {
       soundOn = !soundOn;
       try { localStorage.setItem(soundKey, soundOn ? "1" : "0"); } catch (e) {}
-      panel.querySelector(".rag2-sound").textContent = soundOn ? "Sound on" : "Sound off";
+      var sb = panel.querySelector(".rag2-sound");
+      sb.style.opacity = soundOn ? "1" : "0.45";
+      sb.setAttribute("aria-label", soundOn ? "Turn sound off" : "Turn sound on");
       if (soundOn) playSound("receive");
     };
     panel.querySelector(".rag2-close").onclick = closeChat;
@@ -434,8 +470,16 @@
     }
     function showWelcome() {
       var w = document.createElement("div"); w.className = "rag2-welcome";
-      var p = document.createElement("p"); p.textContent = state.config.welcome_message; w.appendChild(p);
-      msgsEl.appendChild(w);
+      var lines = String(state.config.welcome_message || "").split(/\r?\n/).map(function (line) {
+        return line.trim().replace(/^>\s?/, "");
+      }).filter(Boolean);
+      if (!lines.length) lines = [String(state.config.welcome_message || "")];
+      lines.forEach(function (line) {
+        var p = document.createElement("p"); p.textContent = line; w.appendChild(p);
+      });
+      var row = document.createElement("div"); row.className = "rag2-row";
+      var av = document.createElement("div"); av.className = "rag2-avatar"; setAvatar(av);
+      row.appendChild(av); row.appendChild(w); msgsEl.appendChild(row);
       var chips = Array.isArray(state.config.suggested_questions) && state.config.suggested_questions.length
         ? state.config.suggested_questions.slice(0, 4) : DEFAULT_CHIPS;
       msgsEl.appendChild(chipRow(chips, function (label) { sendText(label); }));
@@ -497,7 +541,13 @@
         acts.appendChild(copy); acts.appendChild(up); acts.appendChild(down); node.appendChild(acts);
       }
       renderMessageNode(node, msg);
-      msgsEl.appendChild(node);
+      if (msg.role === "bot") {
+        var brow = document.createElement("div"); brow.className = "rag2-row";
+        var bav = document.createElement("div"); bav.className = "rag2-avatar"; setAvatar(bav);
+        brow.appendChild(bav); brow.appendChild(node); msgsEl.appendChild(brow);
+      } else {
+        msgsEl.appendChild(node);
+      }
       scrollToBottom(opts.forceScroll);
       return node;
     }
@@ -660,7 +710,7 @@
         if (botMsg.text) {
           state.messages.push(botMsg); saveMessages();
           renderMessageNode(botNode, botMsg);
-        } else botNode.remove();
+        } else if (botNode.parentNode && botNode.parentNode.classList && botNode.parentNode.classList.contains("rag2-row")) botNode.parentNode.remove(); else botNode.remove();
         showError(err && err.message ? err.message : "I could not answer right now.", function () { sendTextInternal(state.lastUserMessage); });
         setStreaming(false);
       });
@@ -670,7 +720,7 @@
         if (finished) return; finished = true;
         if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
         if (!fromJson && botMsg.text) { state.messages.push(botMsg); saveMessages(); }
-        if (!fromJson && !botMsg.text) botNode.remove();
+        if (!fromJson && !botMsg.text) { if (botNode.parentNode && botNode.parentNode.classList && botNode.parentNode.classList.contains("rag2-row")) botNode.parentNode.remove(); else botNode.remove(); }
         if (botMsg.text || fromJson) renderMessageNode(botNode, botMsg);
         setStatus(null); setStreaming(false); showJumpButton();
         if (botMsg.text && !state.open) setUnread(unreadCount + 1);

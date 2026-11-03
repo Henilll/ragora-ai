@@ -117,7 +117,23 @@ export type AdminUser = {
   source?: string;
 };
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+// Both variable names are accepted: the README used to document NEXT_PUBLIC_API_URL,
+// the code used NEXT_PUBLIC_API_BASE_URL. A user who followed the README ended up
+// with the localhost fallback in production, so every upload failed with "Failed to fetch".
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+export async function checkApiHealth(): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+    const response = await fetch(`${API_BASE_URL}/health`, { signal: controller.signal });
+    clearTimeout(timer);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
 
 async function errorMessage(response: Response): Promise<string> {
   const text = await response.text();
@@ -172,11 +188,21 @@ export async function uploadWidgetLogo(file: File) {
   const body = new FormData();
   body.append("file", file);
 
-  const response = await fetch(`${API_BASE_URL}/widgets/logo`, {
-    method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    body,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/widgets/logo`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body,
+    });
+  } catch {
+    // "Failed to fetch" means the browser could not reach the backend at all:
+    // wrong host, backend down, or http backend from an https page. Say which
+    // URL was actually tried, or the user cannot tell localhost from production.
+    throw new Error(
+      `Logo upload could not reach the API at ${API_BASE_URL}. Check that NEXT_PUBLIC_API_BASE_URL points to your real backend (https, not localhost) and redeploy the frontend - NEXT_PUBLIC_ values are baked in at build time, changing the env alone does nothing.`,
+    );
+  }
 
   if (!response.ok) {
     throw new Error(await errorMessage(response));

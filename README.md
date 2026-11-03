@@ -256,7 +256,13 @@ GITHUB_CLIENT_SECRET=
 ## Frontend
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+# Production (Vercel): set NEXT_PUBLIC_API_BASE_URL to your real backend URL,
+# for example https://your-backend.onrender.com - never localhost, never the
+# frontend Vercel domain, and use https if the frontend is https. Then redeploy:
+# NEXT_PUBLIC_ values are baked into the frontend at build time, so changing
+# the variable without a redeploy does nothing. The old name NEXT_PUBLIC_API_URL
+# is still accepted as a fallback, but use the BASE_URL name above.
 ```
 
 ---
