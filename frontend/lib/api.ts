@@ -25,6 +25,7 @@ export type WidgetConfig = {
   user_id: string;
   title: string;
   welcome_message: string;
+  suggested_questions: string[];
   theme: "dark" | "light";
   accent_color: string;
   secondary_color: string;
