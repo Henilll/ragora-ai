@@ -337,6 +337,7 @@ class DatabaseService:
         payload = {
             "title": config["title"],
             "welcome_message": config["welcome_message"],
+            "suggested_questions": config.get("suggested_questions") or [],
             "theme": config["theme"],
             "accent_color": config["accent_color"],
             "secondary_color": config["secondary_color"],
@@ -382,12 +383,20 @@ class DatabaseService:
         try:
             return await write_widget(payload)
         except ExternalServiceError as exc:
-            if "launcher_circle_size" not in exc.detail and "launcher_pill_size" not in exc.detail:
+            # Backwards compatibility: if Supabase has not run the migration
+            # for a newer column yet, PostgREST names that column in the
+            # error. Retry without only the named columns, so saving an
+            # older widget never breaks outright.
+            detail = exc.detail or ""
+            strip_keys = {
+                key
+                for key in {"launcher_circle_size", "launcher_pill_size", "suggested_questions"}
+                if key in detail
+            }
+            if not strip_keys:
                 raise
             legacy_payload = {
-                key: value
-                for key, value in payload.items()
-                if key not in {"launcher_circle_size", "launcher_pill_size"}
+                key: value for key, value in payload.items() if key not in strip_keys
             }
             return await write_widget(legacy_payload)
 
