@@ -267,6 +267,35 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 
 ---
 
+## Final build - all audit phases in one (2026-11-03)
+
+This is the single final delivery, not phase-wise. It includes Phase A
+(security) plus the AI, UX, and scale work below, in one commit.
+
+- Widget memory: last 6 visitor messages are now passed to the widget prompt, so follow-ups work.
+- Model fallback: if the primary Groq model fails with 400/404, the backend tries GROQ_FALLBACK_MODEL once. Owners can also pick a chat model per widget in the builder.
+- Feedback: widget Helpful / Not helpful buttons now POST to /widgets/{id}/feedback, and analytics shows helpful / not helpful counts. Run supabase/widget_feedback.sql first.
+- Regenerate: widget Regenerate button calls /widgets/{id}/regenerate with the last question.
+- Upload: PDF, TXT, Markdown, and DOCX (stdlib only, no new dependency). Embedding runs as a BackgroundTask after the response, so uploads no longer block the request. Status is processing, then ready or failed.
+- History: search by text or visitor, pagination, and CSV/JSON export from the dashboard.
+- Analytics: days filter (default 30, max 90), plus optional SQL function in supabase/widget_analytics.sql with Python fallback if it is not installed.
+- Dashboard: fake metrics removed from the landing page, API base URL is now in one place (frontend/lib/config.ts), history search/export in the dashboard.
+- Docker: backend/Dockerfile and docker-compose.yml for local backend runs.
+- CI: .github/workflows/ci.yml runs backend tests and frontend build.
+- Logging: backend logs method, path, status, and duration only, never bodies or tokens.
+- Disabled widgets: fixed - the DB query used to filter disabled widgets out before the enabled check could run, so they never actually hid. Now config and chat see disabled widgets and enforce the flag.
+- Phase A bug fixed: widget chat used to name its body parameter "request", shadowing the FastAPI Request, so rate limiting and origin checks would crash. It now uses payload + http_request, with a regression test.
+- Not built, on purpose: full multi-agent workflows, MCP, and web search as a default. Those do not fit a document-grounded widget product yet, and would add latency, cost, and hallucination risk.
+
+## Phase A - Security notes (2026-11-03)
+
+- `JWT_SECRET` is required. The backend will not start without it. Set it to a long random value in production, and use the same value across backend instances.
+- Bootstrap admin is only created when both `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` are set. Rotate the bootstrap password after first use.
+- Public widget chat is rate limited per IP, per widget, and per visitor, and can be restricted with `allowed_domains` in the widget builder (blank = allow all, for backward compatibility).
+- Signup no longer returns a session for an unverified email. Verify with the emailed code, then log in.
+- Password reset uses a signed, expiry-bound token sent by email. The token stops working as soon as the password changes.
+- PDF upload is limited to 20 MB and 200 pages by default (`MAX_PDF_BYTES`, `MAX_PDF_PAGES` in backend config).
+
 # 🚀 Local Development
 
 ## Clone Repository

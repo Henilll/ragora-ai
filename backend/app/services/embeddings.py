@@ -24,7 +24,15 @@ class EmbeddingService:
             return []
 
         batches = [texts[i : i + batch_size] for i in range(0, len(texts), batch_size)]
-        results = await asyncio.gather(*(self._embed_batch(batch) for batch in batches))
+        # Limit concurrency to 4 batches at once. Previously all batches
+        # fired at once, which hit Mistral rate limits on large PDFs.
+        semaphore = asyncio.Semaphore(4)
+
+        async def _limited(batch: list[str]) -> list[list[float]]:
+            async with semaphore:
+                return await self._embed_batch(batch)
+
+        results = await asyncio.gather(*(_limited(batch) for batch in batches))
         return [embedding for batch in results for embedding in batch]
 
     async def embed_query(self, text: str) -> list[float]:

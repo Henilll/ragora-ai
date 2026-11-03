@@ -199,7 +199,7 @@
         logo_url: "", icon_label: "AI", launcher_style: "pill",
         launcher_circle_size: 60, launcher_pill_size: 56, border_radius: 14,
         launcher_label: "Chat with AI", input_placeholder: "Ask a question",
-        position: "bottom-right", collect_leads: false, suggested_questions: []
+        position: "bottom-right", collect_leads: false, suggested_questions: [], is_enabled: true
       },
       messages: []
     };
@@ -536,9 +536,24 @@
         var down = document.createElement("button"); down.type = "button"; down.textContent = "Not helpful";
         if (msg.feedback === "up") up.classList.add("on");
         if (msg.feedback === "down") down.classList.add("on");
-        up.onclick = function () { msg.feedback = msg.feedback === "up" ? "" : "up"; up.classList.toggle("on", msg.feedback === "up"); down.classList.remove("on"); saveMessages(); };
-        down.onclick = function () { msg.feedback = msg.feedback === "down" ? "" : "down"; down.classList.toggle("on", msg.feedback === "down"); up.classList.remove("on"); saveMessages(); };
-        acts.appendChild(copy); acts.appendChild(up); acts.appendChild(down); node.appendChild(acts);
+        up.onclick = function () { msg.feedback = msg.feedback === "up" ? "" : "up"; up.classList.toggle("on", msg.feedback === "up"); down.classList.remove("on"); saveMessages(); if (msg.feedback === "up") sendFeedback("helpful", msg); };
+        function sendFeedback(rating, m) {
+          try {
+            fetch(apiBase + "/widgets/" + encodeURIComponent(widgetId) + "/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ visitor_id: visitorId, rating: rating, bot_message: (m.text || "").slice(0, 2000), question: (state.lastUserMessage || "").slice(0, 2000) }) }).catch(function () {});
+          } catch (e) {}
+        }
+        down.onclick = function () { msg.feedback = msg.feedback === "down" ? "" : "down"; down.classList.toggle("on", msg.feedback === "down"); up.classList.remove("on"); saveMessages(); if (msg.feedback === "down") sendFeedback("not_helpful", msg); };
+        var regen = document.createElement("button"); regen.type = "button"; regen.textContent = "Regenerate";
+        regen.onclick = function () {
+          var q = state.lastUserMessage || "";
+          if (!q) return;
+          setStatus("Regenerating...");
+          fetch(apiBase + "/widgets/" + encodeURIComponent(widgetId) + "/regenerate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ visitor_id: visitorId, question: q }) })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (data) { if (data && data.answer) addMessage({ role: "bot", text: data.answer, sources: data.sources || [], ts: timeNow() }); setStatus(""); })
+            .catch(function () { setStatus(""); });
+        };
+        acts.appendChild(copy); acts.appendChild(up); acts.appendChild(down); acts.appendChild(regen); node.appendChild(acts);
       }
       renderMessageNode(node, msg);
       if (msg.role === "bot") {
@@ -770,6 +785,7 @@
       .catch(function () { return state.config; })
       .then(function (config) {
         state.config = Object.assign(state.config, config || {});
+        if (state.config.is_enabled === false) { root.style.display = "none"; return; }
         setThemeAndBrand();
         if (loadMessages()) {
           state.messages.forEach(function (m) { addMessage(m, { noActions: false }); });

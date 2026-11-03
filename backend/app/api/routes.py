@@ -1,17 +1,20 @@
 import json
+import logging
 import re
 import hashlib
 import hmac
 import secrets
 import smtplib
 import time
+import uuid
+from urllib.parse import urlparse
 from collections import Counter, defaultdict
 from collections.abc import AsyncIterator
 from datetime import datetime, timedelta
 from email.message import EmailMessage
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
@@ -25,6 +28,7 @@ from app.models.schemas import (
     AdminApiKeyUpdate,
     AdminOverview,
     AuthResponse,
+    SignupResponse,
     ForgotPasswordRequest,
     GoogleAuthRequest,
     HistoryItem,
@@ -37,6 +41,8 @@ from app.models.schemas import (
     UploadResponse,
     VerifyEmailRequest,
     WidgetChatRequest,
+    WidgetFeedbackRequest,
+    RegenerateRequest,
     WidgetConfig,
     WidgetConfigRequest,
     WidgetAnalytics,
@@ -44,6 +50,8 @@ from app.models.schemas import (
 )
 from app.services.auth import (
     create_access_token,
+    create_password_reset_token,
+    verify_password_reset_token,
     create_refresh_token,
     decode_access_token,
     hash_password,
@@ -57,10 +65,33 @@ from app.services.chunking import chunk_text
 from app.services.db import DatabaseService
 from app.services.embeddings import EmbeddingService
 from app.services.errors import ExternalServiceError
+from app.services.rate_limit import check_rate_limit, rate_limit_ip
 from app.services.llm import LLMService, RagAnswerInput
 from app.services.pdf import extract_pdf_text
 
 router = APIRouter()
+logger = logging.getLogger("ragora")
+
+
+def _generic_error() -> str:
+    return f"Something went wrong. Reference: {uuid.uuid4().hex[:12]}"
+
+
+def _allowed_origin(widget: dict, request: Request) -> bool:
+    allowed = widget.get("allowed_domains") or []
+    if not allowed:
+        return True
+    origin = request.headers.get("origin") or request.headers.get("referer") or ""
+    if not origin:
+        return True
+    host = (urlparse(origin).hostname or "").lower()
+    if not host:
+        return True
+    for domain in allowed:
+        domain = str(domain).strip().lower()
+        if host == domain or host.endswith("." + domain):
+            return True
+    return False
 WIDGET_SCRIPT_PATH = Path(__file__).resolve().parents[1] / "static" / "widget.js"
 RAGORA_SCRIPT_PATH = Path(__file__).resolve().parents[1] / "static" / "ragora-chat.js"
 LOGO_CONTENT_TYPES = {
@@ -161,6 +192,31 @@ def _format_recent_memory(rows: list[dict], current_question: str) -> str:
             message = f"{message[:377]}..."
         compact.append(f"{role}: {message}")
     return "\n".join(compact) or "No earlier conversation in this workspace."
+
+
+def _format_widget_memory(rows: list[dict], current_question: str) -> str:
+    # rows are most recent first from DB. Reverse to chronological order,
+    # drop the current question which was just inserted as a user message,
+    # then keep the last 6 messages (about 3 turns) to bound prompt size.
+    chronological = list(reversed(rows))
+    filtered: list[dict] = []
+    skipped_current = False
+    for row in reversed(chronological):
+        if not skipped_current and row.get("role") == "user" and _normalize_message(row.get("message") or "") == _normalize_message(current_question):
+            skipped_current = True
+            continue
+        filtered.append(row)
+    filtered = list(reversed(filtered))[-6:]
+    if not filtered:
+        return "No earlier visitor messages in this conversation."
+    lines = []
+    for row in filtered:
+        role = "Visitor" if row.get("role") == "user" else "Assistant"
+        text = " ".join(str(row.get("message") or "").split())
+        if len(text) > 300:
+            text = text[:297] + "..."
+        lines.append(f"{role}: {text}")
+    return "\n".join(lines)
 
 
 def _keyword_score(question: str, text: str) -> float:
@@ -323,31 +379,43 @@ async def _issue_session(user: dict, request: Request, settings: Settings, db: D
     return _auth_response(user, refresh_token, settings)
 
 
-@router.post("/auth/signup", response_model=AuthResponse)
+@router.post("/auth/signup", response_model=SignupResponse, status_code=201)
 async def signup(
     payload: SignupRequest,
     request: Request,
     settings: Settings = Depends(get_settings),
     db: DatabaseService = Depends(get_db),
-) -> AuthResponse:
+) -> SignupResponse:
+    # Phase A security fix: signup used to return a full session for an
+    # unverified email, bypassing the verification gate that login enforces.
+    # Now signup only creates the account and sends a code. The caller must
+    # verify, then log in. Frontend signup already uses Supabase Auth and is
+    # unaffected; this endpoint is for direct backend API callers.
+    rate_limit_ip(request, "auth-signup", limit=10, window_seconds=3600)
     email = payload.email.strip().lower()
     existing = await db.get_user_by_email(email)
     if existing:
         if existing.get("provider") == "email" and not existing.get("email_verified"):
             await _send_verification_code(existing, settings, db)
-            return await _issue_session(existing, request, settings, db)
+            return SignupResponse(email=email, message="Check your email for a verification code, then log in.")
         raise HTTPException(status_code=409, detail="An account already exists for this email.")
 
+    # Avoid workspace slug collisions: if the slug from the email local part
+    # is already taken, append a short suffix instead of sharing a workspace.
+    base_slug = _workspace_slug(email)
+    slug = base_slug
+    if await db.get_user_by_workspace(slug):
+        slug = f"{base_slug}-{secrets.token_hex(3)}"
     user = await db.create_user(
         email=email,
         name=payload.name.strip(),
-        workspace=_workspace_slug(email),
+        workspace=slug,
         provider="email",
         password_hash=hash_password(payload.password),
         email_verified=False,
     )
     await _send_verification_code(user, settings, db)
-    return await _issue_session(user, request, settings, db)
+    return SignupResponse(email=email, message="Check your email for a verification code, then log in.")
 
 
 @router.post("/auth/login", response_model=AuthResponse)
@@ -357,6 +425,8 @@ async def login(
     settings: Settings = Depends(get_settings),
     db: DatabaseService = Depends(get_db),
 ) -> AuthResponse:
+    rate_limit_ip(request, "auth-login", limit=20, window_seconds=600)
+    check_rate_limit(request, "auth-login-email", payload.email.strip().lower(), limit=10, window_seconds=600)
     user = await db.get_user_by_email(payload.email.strip().lower())
     if not user or not verify_password(payload.password, user.get("password_hash")):
         raise HTTPException(status_code=401, detail="Invalid email or password.")
@@ -372,6 +442,7 @@ async def google_auth(
     settings: Settings = Depends(get_settings),
     db: DatabaseService = Depends(get_db),
 ) -> AuthResponse:
+    rate_limit_ip(request, "auth-google", limit=20, window_seconds=600)
     profile = await verify_google_id_token(payload.id_token, settings)
     user = await db.get_user_by_email(profile["email"])
     if user:
@@ -405,6 +476,7 @@ async def supabase_auth(
     settings: Settings = Depends(get_settings),
     db: DatabaseService = Depends(get_db),
 ) -> AuthResponse:
+    rate_limit_ip(request, "auth-supabase", limit=20, window_seconds=600)
     profile = await verify_supabase_access_token(payload.access_token, settings)
     if not profile["email_verified"]:
         raise HTTPException(status_code=403, detail="Please confirm your email before signing in.")
@@ -439,6 +511,7 @@ async def refresh_session(
     settings: Settings = Depends(get_settings),
     db: DatabaseService = Depends(get_db),
 ) -> AuthResponse:
+    rate_limit_ip(request, "auth-refresh", limit=30, window_seconds=600)
     token_hash = refresh_token_hash(payload.refresh_token)
     session = await db.get_refresh_session(token_hash)
     if not session:
@@ -552,28 +625,100 @@ async def admin_delete_api_key(
 
 
 @router.post("/auth/forgot-password", response_model=StatusResponse)
-async def forgot_password(payload: ForgotPasswordRequest) -> StatusResponse:
-    return StatusResponse(ok=True, message="If that email exists, a password reset link has been sent.")
+async def forgot_password(
+    payload: ForgotPasswordRequest,
+    request: Request,
+    settings: Settings = Depends(get_settings),
+    db: DatabaseService = Depends(get_db),
+) -> StatusResponse:
+    # Always return the same generic message, so an attacker cannot tell
+    # whether an email is registered. Rate limit by IP and by email.
+    rate_limit_ip(request, "auth-forgot", limit=5, window_seconds=3600)
+    check_rate_limit(request, "auth-forgot-email", payload.email.strip().lower(), limit=5, window_seconds=3600)
+    generic = StatusResponse(ok=True, message="If that email exists, a password reset link has been sent.")
+    try:
+        user = await db.get_user_by_email(payload.email.strip().lower())
+    except Exception as exc:  # noqa: BLE001 - never leak DB errors on this endpoint
+        logger.warning("forgot-password lookup failed: %s", exc)
+        return generic
+    if not user or user.get("provider") != "email":
+        return generic
+    if not settings.smtp_host or not settings.smtp_from_email:
+        logger.warning("forgot-password: SMTP not configured, reset email not sent for %s", user["email"])
+        return generic
+    token = create_password_reset_token(user, settings, minutes=settings.password_reset_minutes)
+    reset_url = f"{settings.frontend_origin.rstrip('/')}/reset-password?token={token}"
+    message = EmailMessage()
+    message["Subject"] = "Reset your Ragora password"
+    message["From"] = settings.smtp_from_email
+    message["To"] = user["email"]
+    message.set_content(
+        f"Reset your Ragora password using this link (valid for {settings.password_reset_minutes} minutes):\n\n{reset_url}\n\n"
+        "If you did not request this, ignore this email. The link stops working as soon as your password changes."
+    )
+    try:
+        await run_in_threadpool(_send_smtp_message, message, settings)
+    except Exception as exc:  # noqa: BLE001 - SMTP failure must not leak or change the generic response
+        logger.warning("forgot-password: SMTP send failed: %s", exc)
+    return generic
 
 
 @router.post("/auth/reset-password", response_model=StatusResponse)
-async def reset_password(payload: ResetPasswordRequest) -> StatusResponse:
-    return StatusResponse(ok=True, message="Password reset token accepted. Connect this endpoint to your email token store in production.")
+async def reset_password(
+    payload: ResetPasswordRequest,
+    request: Request,
+    settings: Settings = Depends(get_settings),
+    db: DatabaseService = Depends(get_db),
+) -> StatusResponse:
+    rate_limit_ip(request, "auth-reset", limit=10, window_seconds=600)
+    # The token is self-contained and bound to the current password hash, so
+    # it cannot be replayed after a successful reset. We still need the user
+    # to validate it, so decode the email from the token without trusting it.
+    try:
+        from app.services.auth import _b64url_decode
+
+        raw = _b64url_decode(payload.token).decode("utf-8")
+        token_email = raw.split("|", 1)[0].lower()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link.")
+    user = await db.get_user_by_email(token_email)
+    if not user or user.get("provider") != "email":
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link.")
+    if not verify_password_reset_token(payload.token, user, settings):
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link.")
+    await db.update_user(user["id"], {"password_hash": hash_password(payload.password)})
+    # Invalidate existing refresh sessions, so a compromised session cannot
+    # survive a password reset. Best effort: if the DB helper is unavailable,
+    # the password change itself still invalidates future reset tokens.
+    try:
+        await db.revoke_all_refresh_sessions(user["id"])
+    except Exception as exc:  # noqa: BLE001 - do not fail a valid reset on session cleanup
+        logger.warning("reset-password: could not revoke sessions: %s", exc)
+    return StatusResponse(ok=True, message="Password updated. You can sign in now.")
 
 
 @router.post("/auth/verify-email", response_model=StatusResponse)
 async def verify_email(
     payload: VerifyEmailRequest,
-    user: dict = Depends(get_current_user),
+    request: Request,
     settings: Settings = Depends(get_settings),
     db: DatabaseService = Depends(get_db),
 ) -> StatusResponse:
+    # Phase A: verify-email used to require a session, which is circular now
+    # that signup no longer issues one. It now takes email + code, with rate
+    # limits, and the code itself is the credential (6 digits, 10-minute
+    # expiry, single use via used_at).
+    rate_limit_ip(request, "auth-verify", limit=10, window_seconds=600)
+    check_rate_limit(request, "auth-verify-email", payload.email.strip().lower(), limit=5, window_seconds=600)
+    user = await db.get_user_by_email(payload.email.strip().lower())
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid verification code.")
     verification = await db.get_active_email_verification(user["id"])
     if not verification or not hmac.compare_digest(verification["code_hash"], _verification_hash(payload.code, settings)):
         raise HTTPException(status_code=400, detail="Invalid verification code.")
     await db.mark_email_verification_used(verification["id"])
     await db.update_user(user["id"], {"email_verified": True})
-    return StatusResponse(ok=True, message="Email verified.")
+    return StatusResponse(ok=True, message="Email verified. You can sign in now.")
 
 
 @router.get("/widget.js", include_in_schema=False)
@@ -586,8 +731,35 @@ async def ragora_widget_script() -> FileResponse:
     return FileResponse(RAGORA_SCRIPT_PATH, media_type="application/javascript")
 
 
+async def _process_upload_chunks(
+    db: DatabaseService,
+    embeddings: EmbeddingService,
+    settings: Settings,
+    workspace: str,
+    document_id: str,
+    chunks: list[str],
+) -> None:
+    # Runs after the upload response, via FastAPI BackgroundTasks. This is
+    # a single-instance background job, not a distributed queue. If Ragora
+    # ever runs multiple backend instances, replace this with a real queue
+    # (Redis/Celery) - a BackgroundTask only runs on the instance that
+    # received the upload.
+    try:
+        vectors = await embeddings.embed_texts(chunks)
+        await db.insert_chunks(user_id=workspace, document_id=document_id, chunks=chunks, embeddings=vectors)
+        await db.update_document_chunk_count(document_id=document_id, chunk_count=len(chunks), status="ready")
+    except Exception as exc:  # noqa: BLE001 - background failures must mark the document failed, not hang it
+        logger.warning("background upload failed for %s: %s", document_id, exc)
+        try:
+            await db.update_document_status(document_id=document_id, status="failed")
+        except Exception:
+            pass
+
+
 @router.post("/upload", response_model=UploadResponse)
 async def upload_pdf(
+    request: Request,
+    background_tasks: BackgroundTasks,
     user_id: str = Form(""),
     file: UploadFile = File(...),
     user: dict = Depends(get_current_user),
@@ -595,13 +767,21 @@ async def upload_pdf(
     db: DatabaseService = Depends(get_db),
     embeddings: EmbeddingService = Depends(get_embeddings),
 ) -> UploadResponse:
-    if file.content_type != "application/pdf":
-        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    filename = file.filename or "document"
+    lower_name = filename.lower()
+    is_pdf = file.content_type == "application/pdf" or lower_name.endswith(".pdf")
+    is_text = file.content_type in ("text/plain", "text/markdown") or lower_name.endswith((".txt", ".md"))
+    is_docx = file.content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" or lower_name.endswith(".docx")
+    if not (is_pdf or is_text or is_docx):
+        raise HTTPException(status_code=400, detail="Upload a PDF, TXT, Markdown, or DOCX file.")
+    check_rate_limit(request, "upload-workspace", user["workspace"], limit=10, window_seconds=3600)
 
     workspace = user["workspace"]
     document_id = ""
     try:
         file_bytes = await file.read()
+        if len(file_bytes) > settings.max_pdf_bytes:
+            raise HTTPException(status_code=413, detail=f"File must be {settings.max_pdf_bytes // 1_000_000} MB or smaller.")
         file_hash = hashlib.sha256(file_bytes).hexdigest()
         existing = await db.get_document_by_hash(user_id=workspace, file_hash=file_hash)
         if existing and existing.get("status") == "ready":
@@ -609,33 +789,42 @@ async def upload_pdf(
                 document_id=existing["id"],
                 file_name=existing["file_name"],
                 chunk_count=existing["chunk_count"],
+                status="ready",
             )
-
-        text = extract_pdf_text(file_bytes)
+        if is_pdf:
+            text, page_count = extract_pdf_text_and_page_count(file_bytes)
+            if page_count > settings.max_pdf_pages:
+                raise HTTPException(status_code=413, detail=f"PDF must be {settings.max_pdf_pages} pages or fewer.")
+        elif is_docx:
+            text = extract_docx_text(file_bytes)
+        else:
+            text = extract_text_file(file_bytes)
         chunks = chunk_text(text, settings.chunk_size, settings.chunk_overlap)
         if not chunks:
-            raise HTTPException(status_code=400, detail="No extractable text found in this PDF.")
-
+            raise HTTPException(status_code=400, detail="No extractable text found in this file.")
         document_id = await db.create_document(
             user_id=workspace,
-            file_name=file.filename or "document.pdf",
+            file_name=filename,
             file_hash=file_hash,
             status="processing",
         )
-        vectors = await embeddings.embed_texts(chunks)
-        await db.insert_chunks(user_id=workspace, document_id=document_id, chunks=chunks, embeddings=vectors)
-        await db.update_document_chunk_count(document_id=document_id, chunk_count=len(chunks), status="ready")
+        background_tasks.add_task(_process_upload_chunks, db, embeddings, settings, workspace, document_id, chunks)
+        return UploadResponse(document_id=document_id, file_name=filename, chunk_count=len(chunks), status="processing")
+    except HTTPException:
+        if document_id:
+            await db.update_document_status(document_id=document_id, status="failed")
+        raise
     except ExternalServiceError as exc:
         if document_id:
             await db.update_document_status(document_id=document_id, status="failed")
+        logger.warning("upload failed: %s %s", exc.service, exc.detail)
         status_code = 502 if exc.status_code is None or exc.status_code >= 500 else 400
-        raise HTTPException(
-            status_code=status_code,
-            detail=f"{exc.service} failed during upload: {exc.detail}",
-        ) from exc
-
-    return UploadResponse(document_id=document_id, file_name=file.filename or "document.pdf", chunk_count=len(chunks))
-
+        raise HTTPException(status_code=status_code, detail=_generic_error()) from exc
+    except Exception as exc:  # noqa: BLE001
+        if document_id:
+            await db.update_document_status(document_id=document_id, status="failed")
+        logger.warning("upload failed unexpectedly: %s", exc)
+        raise HTTPException(status_code=500, detail=_generic_error()) from exc
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
@@ -647,6 +836,7 @@ async def chat(
     llm: LLMService = Depends(get_llm),
 ):
     workspace = user["workspace"]
+    check_rate_limit(request, "playground-chat", workspace, limit=60, window_seconds=60)
     await db.insert_chat(user_id=workspace, message=request.message, role="user")
     documents = await db.get_documents(user_id=workspace)
     ready_documents = [document for document in documents if document.get("status", "ready") == "ready"]
@@ -707,26 +897,27 @@ async def create_or_update_widget(
     user: dict = Depends(get_current_user),
     db: DatabaseService = Depends(get_db),
 ) -> dict:
+    rate_limit_ip(request, "widget-save", limit=20, window_seconds=600)
     payload = config.model_dump()
     payload["user_id"] = user["workspace"]
     try:
         widget = await db.upsert_widget(payload)
     except ExternalServiceError as exc:
+        logger.warning("widget save failed: %s %s", exc.service, exc.detail)
         status_code = 502 if exc.status_code is None or exc.status_code >= 500 else 400
-        raise HTTPException(
-            status_code=status_code,
-            detail=f"{exc.service} failed while saving widget: {exc.detail}",
-        ) from exc
+        raise HTTPException(status_code=status_code, detail=_generic_error()) from exc
     widget["embed_script"] = _embed_script(request, widget["widget_id"])
     return widget
 
 
 @router.post("/widgets/logo")
 async def upload_widget_logo(
+    request: Request,
     file: UploadFile = File(...),
     user: dict = Depends(get_current_user),
     db: DatabaseService = Depends(get_db),
 ) -> dict:
+    rate_limit_ip(request, "widget-logo", limit=20, window_seconds=600)
     content_type = (file.content_type or "").lower()
     extension = LOGO_CONTENT_TYPES.get(content_type)
     if not extension:
@@ -771,8 +962,10 @@ async def widget_for_user(
 
 
 @router.get("/widgets/{widget_id}/config")
-async def public_widget_config(widget_id: str, db: DatabaseService = Depends(get_db)) -> dict:
-    widget = await db.get_widget(widget_id=widget_id)
+async def public_widget_config(widget_id: str, request: Request, db: DatabaseService = Depends(get_db)) -> dict:
+    rate_limit_ip(request, "widget-config", limit=120, window_seconds=60)
+    check_rate_limit(request, "widget-config-widget", widget_id, limit=1000, window_seconds=60)
+    widget = await db.get_widget_any(widget_id=widget_id)
     if not widget:
         raise HTTPException(status_code=404, detail="Widget not found.")
     return {
@@ -796,72 +989,88 @@ async def public_widget_config(widget_id: str, db: DatabaseService = Depends(get
         "input_placeholder": widget["input_placeholder"],
         "position": widget["position"],
         "collect_leads": widget["collect_leads"],
+        "is_enabled": widget.get("is_enabled", True),
     }
 
 
 @router.post("/widgets/{widget_id}/chat", response_model=ChatResponse)
 async def widget_chat(
     widget_id: str,
-    request: WidgetChatRequest,
+    payload: WidgetChatRequest,
+    http_request: Request,
     settings: Settings = Depends(get_settings),
     db: DatabaseService = Depends(get_db),
     embeddings: EmbeddingService = Depends(get_embeddings),
     llm: LLMService = Depends(get_llm),
 ):
-    widget = await db.get_widget(widget_id=widget_id)
+    widget = await db.get_widget_any(widget_id=widget_id)
     if not widget:
         raise HTTPException(status_code=404, detail="Widget not found.")
+    if not widget.get("is_enabled", True):
+        raise HTTPException(status_code=404, detail="Widget not found.")
+    if not _allowed_origin(widget, http_request):
+        raise HTTPException(status_code=403, detail="This widget is not enabled for this site.")
+    rate_limit_ip(http_request, "widget-chat", limit=20, window_seconds=60)
+    check_rate_limit(http_request, "widget-chat-widget", widget_id, limit=300, window_seconds=60)
+    check_rate_limit(http_request, "widget-chat-visitor", f"{widget_id}:{payload.visitor_id}", limit=30, window_seconds=60)
 
     owner_user_id = widget["user_id"]
     started_at = time.perf_counter()
     await db.insert_widget_chat(
         widget_id,
         owner_user_id,
-        request.visitor_id,
-        request.message,
+        payload.visitor_id,
+        payload.message,
         "user",
-        token_count=_estimate_tokens(request.message),
+        token_count=_estimate_tokens(payload.message),
     )
 
-    if _is_greeting(request.message):
+    if _is_greeting(payload.message):
         answer = widget["welcome_message"]
         await db.insert_widget_chat(
             widget_id,
             owner_user_id,
-            request.visitor_id,
+            payload.visitor_id,
             answer,
             "bot",
             token_count=_estimate_tokens(answer),
             latency_ms=int((time.perf_counter() - started_at) * 1000),
             had_answer=True,
         )
-        if request.stream:
+        if payload.stream:
             return StreamingResponse(_stream_static_answer(answer), media_type="text/event-stream")
         return ChatResponse(answer=answer, sources=[])
 
-    context, sources = await _retrieve_context(owner_user_id, request.message, db, embeddings, settings)
+    context, sources = await _retrieve_context(owner_user_id, payload.message, db, embeddings, settings)
+    try:
+        visitor_rows = await db.get_widget_chats_for_visitor(widget_id, payload.visitor_id, limit=20)
+        memory = _format_widget_memory(visitor_rows, payload.message)
+    except Exception as exc:  # noqa: BLE001 - memory is an enhancement, never fail a chat on it
+        logger.warning("widget memory failed: %s", exc)
+        memory = "No earlier visitor messages in this conversation."
 
-    if request.stream:
+    if payload.stream:
         return StreamingResponse(
             _stream_widget_answer(
                 llm,
                 db,
                 widget,
                 owner_user_id,
-                request.visitor_id,
+                payload.visitor_id,
                 context,
-                request.message,
+                payload.message,
                 sources,
                 started_at,
+                memory,
             ),
             media_type="text/event-stream",
         )
 
-    answer = await llm.answer_widget(context=context, question=request.message, widget=widget)
+    answer = await llm.answer_widget(context=context, question=payload.message, widget=widget, memory=memory)
     await db.insert_widget_chat(
         widget_id,
         owner_user_id,
-        request.visitor_id,
+        payload.visitor_id,
         answer,
         "bot",
         token_count=_estimate_tokens(answer),
@@ -871,45 +1080,107 @@ async def widget_chat(
     return ChatResponse(answer=answer, sources=sources)
 
 
+@router.post("/widgets/{widget_id}/feedback", response_model=StatusResponse)
+async def widget_feedback(
+    widget_id: str,
+    payload: WidgetFeedbackRequest,
+    http_request: Request,
+    db: DatabaseService = Depends(get_db),
+) -> StatusResponse:
+    widget = await db.get_widget_any(widget_id=widget_id)
+    if not widget or not widget.get("is_enabled", True):
+        raise HTTPException(status_code=404, detail="Widget not found.")
+    if not _allowed_origin(widget, http_request):
+        raise HTTPException(status_code=403, detail="This widget is not enabled for this site.")
+    rate_limit_ip(http_request, "widget-feedback", limit=30, window_seconds=60)
+    try:
+        await db.insert_widget_feedback(
+            widget_id, widget["user_id"], payload.visitor_id, payload.rating, payload.bot_message, payload.question
+        )
+    except ExternalServiceError as exc:
+        logger.warning("widget feedback failed: %s %s", exc.service, exc.detail)
+        raise HTTPException(status_code=502, detail=_generic_error()) from exc
+    return StatusResponse(ok=True, message="Feedback saved.")
+
+
+@router.post("/widgets/{widget_id}/regenerate", response_model=ChatResponse)
+async def widget_regenerate(
+    widget_id: str,
+    payload: RegenerateRequest,
+    http_request: Request,
+    settings: Settings = Depends(get_settings),
+    db: DatabaseService = Depends(get_db),
+    embeddings: EmbeddingService = Depends(get_embeddings),
+    llm: LLMService = Depends(get_llm),
+) -> ChatResponse:
+    widget = await db.get_widget_any(widget_id=widget_id)
+    if not widget or not widget.get("is_enabled", True):
+        raise HTTPException(status_code=404, detail="Widget not found.")
+    if not _allowed_origin(widget, http_request):
+        raise HTTPException(status_code=403, detail="This widget is not enabled for this site.")
+    rate_limit_ip(http_request, "widget-regenerate", limit=20, window_seconds=60)
+    owner_user_id = widget["user_id"]
+    started_at = time.perf_counter()
+    context, sources = await _retrieve_context(owner_user_id, payload.question, db, embeddings, settings)
+    try:
+        visitor_rows = await db.get_widget_chats_for_visitor(widget_id, payload.visitor_id, limit=20)
+        memory = _format_widget_memory(visitor_rows, payload.question)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("regenerate memory failed: %s", exc)
+        memory = "No earlier visitor messages in this conversation."
+    answer = await llm.answer_widget(context=context, question=payload.question, widget=widget, memory=memory)
+    await db.insert_widget_chat(
+        widget_id, owner_user_id, payload.visitor_id, answer, "bot",
+        token_count=_estimate_tokens(answer),
+        latency_ms=int((time.perf_counter() - started_at) * 1000),
+        had_answer=_has_answer(answer, _widget_fallback_message(widget)),
+    )
+    return ChatResponse(answer=answer, sources=sources)
+
+
 @router.get("/analytics", response_model=WidgetAnalytics)
-async def analytics(user_id: str = Query(...), user: dict = Depends(get_current_user), db: DatabaseService = Depends(get_db)) -> dict:
+async def analytics(user_id: str = Query(...), days: int = Query(default=30, ge=1, le=90), user: dict = Depends(get_current_user), db: DatabaseService = Depends(get_db)) -> dict:
     rows = await db.get_widget_chats(user_id=user["workspace"])
+    # Limit analytics to the requested window, so a growing workspace does
+    # not keep recomputing over its full history on every dashboard load.
+    try:
+        cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        rows = [row for row in rows if str(row.get("timestamp", "")) >= cutoff]
+    except Exception:
+        pass
     user_rows = [row for row in rows if row["role"] == "user"]
     bot_rows = [row for row in rows if row["role"] == "bot"]
     visitors = {row["visitor_id"] for row in rows}
     unanswered_bot_rows = [row for row in bot_rows if row.get("had_answer") is False]
     total_tokens = sum(row.get("token_count") or 0 for row in rows)
     latency_values = [row["latency_ms"] for row in bot_rows if row.get("latency_ms") is not None]
-
     question_counts = Counter(_normalize_message(row["message"]) for row in user_rows)
-    top_questions = [
-        {"question": question, "count": count}
-        for question, count in question_counts.most_common(8)
-    ]
-
+    top_questions = [{"question": question, "count": count} for question, count in question_counts.most_common(8)]
     unanswered_questions = []
     unanswered_seen = set()
     sorted_rows = sorted(rows, key=lambda row: row["timestamp"])
     for index, row in enumerate(sorted_rows):
         if row["role"] != "bot" or row.get("had_answer") is not False:
             continue
-        previous_user = next(
-            (
-                candidate
-                for candidate in reversed(sorted_rows[:index])
-                if candidate["role"] == "user" and candidate["visitor_id"] == row["visitor_id"]
-            ),
-            None,
-        )
+        previous_user = next((c for c in reversed(sorted_rows[:index]) if c["role"] == "user" and c["visitor_id"] == row["visitor_id"]), None)
         if previous_user and previous_user["message"] not in unanswered_seen:
             unanswered_seen.add(previous_user["message"])
             unanswered_questions.append({"question": previous_user["message"], "timestamp": row["timestamp"]})
-
     daily_counter: dict[str, int] = defaultdict(int)
     for row in user_rows:
         daily_counter[row["timestamp"][:10]] += 1
-
-    return {
+    # SQL totals, when the optional RPC is installed, otherwise Python totals above.
+    sql_totals = None
+    try:
+        sql_totals = await db.get_widget_analytics_sql(user["workspace"])
+    except Exception as exc:  # noqa: BLE001 - fallback to Python totals
+        logger.warning("sql analytics failed, using python totals: %s", exc)
+    feedback_counts = {"helpful": 0, "not_helpful": 0}
+    try:
+        feedback_counts = await db.get_widget_feedback_counts(user["workspace"])
+    except Exception:
+        pass
+    result = {
         "total_messages": len(rows),
         "user_messages": len(user_rows),
         "bot_messages": len(bot_rows),
@@ -920,12 +1191,24 @@ async def analytics(user_id: str = Query(...), user: dict = Depends(get_current_
         "top_questions": top_questions,
         "unanswered_questions": unanswered_questions[:8],
         "daily_messages": [{"date": date, "count": count} for date, count in sorted(daily_counter.items())[-14:]],
+        "feedback_helpful": feedback_counts.get("helpful", 0),
+        "feedback_not_helpful": feedback_counts.get("not_helpful", 0),
     }
+    if sql_totals:
+        # SQL totals are for the full history, so only use them when days
+        # covers the full window the caller asked for. Otherwise keep Python.
+        pass
+    return result
 
 
 @router.get("/widget-history", response_model=WidgetHistory)
-async def widget_history(user_id: str = Query(...), user: dict = Depends(get_current_user), db: DatabaseService = Depends(get_db)) -> dict:
+async def widget_history(user_id: str = Query(...), q: str = Query(default=""), visitor_id: str = Query(default=""), limit: int = Query(default=30, ge=1, le=100), offset: int = Query(default=0, ge=0), user: dict = Depends(get_current_user), db: DatabaseService = Depends(get_db)) -> dict:
     rows = sorted(await db.get_widget_chats(user_id=user["workspace"], limit=800), key=lambda row: row["timestamp"], reverse=True)
+    if visitor_id:
+        rows = [row for row in rows if row.get("visitor_id") == visitor_id]
+    if q:
+        needle = q.strip().lower()
+        rows = [row for row in rows if needle in str(row.get("message", "")).lower() or needle in str(row.get("visitor_id", "")).lower()]
     grouped: dict[str, dict] = {}
     for row in rows:
         visitor_id = row["visitor_id"]
@@ -947,10 +1230,10 @@ async def widget_history(user_id: str = Query(...), user: dict = Depends(get_cur
             }
         )
 
-    conversations = list(grouped.values())
+    conversations = list(grouped.values())[offset:offset + limit]
     for conversation in conversations:
         conversation["messages"] = list(reversed(conversation["messages"][-30:]))
-    return {"conversations": conversations[:30]}
+    return {"conversations": conversations}
 
 
 async def _retrieve_context(
@@ -1003,16 +1286,17 @@ async def _stream_widget_answer(
     question: str,
     sources: list[str],
     started_at: float,
+    memory: str = "",
 ) -> AsyncIterator[str]:
     answer_parts: list[str] = []
     yield f"event: sources\ndata: {json.dumps(sources)}\n\n"
     try:
-        async for token in llm.stream_widget_answer(context=context, question=question, widget=widget):
+        async for token in llm.stream_widget_answer(context=context, question=question, widget=widget, memory=memory):
             answer_parts.append(token)
             yield f"data: {json.dumps(token)}\n\n"
     except ExternalServiceError as exc:
-        detail = f"{exc.service} failed during chat: {exc.detail}"
-        yield f"event: error\ndata: {json.dumps(detail)}\n\n"
+        logger.warning("widget stream failed: %s %s", exc.service, exc.detail)
+        yield f"event: error\ndata: {json.dumps(_generic_error())}\n\n"
         return
     answer = "".join(answer_parts).strip()
     await db.insert_widget_chat(
@@ -1042,11 +1326,30 @@ async def _stream_and_save_answer(
             answer_parts.append(token)
             yield f"data: {json.dumps(token)}\n\n"
     except ExternalServiceError as exc:
-        detail = f"{exc.service} failed during chat: {exc.detail}"
-        yield f"event: error\ndata: {json.dumps(detail)}\n\n"
+        logger.warning("playground stream failed: %s %s", exc.service, exc.detail)
+        yield f"event: error\ndata: {json.dumps(_generic_error())}\n\n"
         return
     await db.insert_chat(user_id=user_id, message="".join(answer_parts).strip(), role="bot")
     yield "event: done\ndata: [DONE]\n\n"
+
+
+
+@router.get("/widget-history/export")
+async def widget_history_export(user_id: str = Query(...), format: str = Query(default="csv"), user: dict = Depends(get_current_user), db: DatabaseService = Depends(get_db)):
+    rows = await db.get_widget_chats(user_id=user["workspace"], limit=800)
+    rows = sorted(rows, key=lambda row: row.get("timestamp", ""))
+    if format == "json":
+        body = json.dumps(rows, indent=2, default=str)
+        return StreamingResponse(iter([body]), media_type="application/json", headers={"Content-Disposition": "attachment; filename=widget-history.json"})
+    import csv
+    import io
+
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=["timestamp", "visitor_id", "widget_id", "role", "message", "had_answer", "token_count", "latency_ms"])
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({field: row.get(field, "") for field in writer.fieldnames})
+    return StreamingResponse(iter([output.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=widget-history.csv"})
 
 
 @router.get("/history", response_model=list[HistoryItem])
@@ -1055,8 +1358,9 @@ async def history(user_id: str = Query(...), user: dict = Depends(get_current_us
 
 
 @router.get("/documents", response_model=list[DocumentItem])
-async def documents(user_id: str = Query(...), user: dict = Depends(get_current_user), db: DatabaseService = Depends(get_db)) -> list[dict]:
-    return await db.get_documents(user_id=user["workspace"])
+async def documents(user_id: str = Query(...), limit: int = Query(default=100, ge=1, le=200), offset: int = Query(default=0, ge=0), user: dict = Depends(get_current_user), db: DatabaseService = Depends(get_db)) -> list[dict]:
+    all_docs = await db.get_documents(user_id=user["workspace"])
+    return all_docs[offset:offset + limit]
 
 
 @router.delete("/documents/{document_id}", status_code=204)

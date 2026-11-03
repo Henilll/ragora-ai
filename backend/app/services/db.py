@@ -69,6 +69,15 @@ class DatabaseService:
         rows = response.json()
         return rows[0] if rows else None
 
+    async def get_user_by_workspace(self, workspace: str) -> dict | None:
+        response = await self._request(
+            "GET",
+            "users",
+            params={"select": "*", "workspace": f"eq.{workspace}", "limit": "1"},
+        )
+        rows = response.json()
+        return rows[0] if rows else None
+
     async def get_user_by_id(self, user_id: str) -> dict | None:
         response = await self._request(
             "GET",
@@ -182,6 +191,13 @@ class DatabaseService:
         )
         rows = response.json()
         return rows[0] if rows else None
+
+    async def revoke_all_refresh_sessions(self, user_id: str) -> None:
+        await self._request(
+            "DELETE",
+            "refresh_sessions",
+            params={"user_id": f"eq.{user_id}"},
+        )
 
     async def revoke_refresh_session(self, token_hash: str) -> None:
         await self._request(
@@ -338,6 +354,7 @@ class DatabaseService:
             "title": config["title"],
             "welcome_message": config["welcome_message"],
             "suggested_questions": config.get("suggested_questions") or [],
+            "allowed_domains": config.get("allowed_domains") or [],
             "theme": config["theme"],
             "accent_color": config["accent_color"],
             "secondary_color": config["secondary_color"],
@@ -359,6 +376,7 @@ class DatabaseService:
             "custom_instructions": config["custom_instructions"],
             "fallback_message": config["fallback_message"],
             "collect_leads": config["collect_leads"],
+            "chat_model": config.get("chat_model") or "",
             "is_enabled": config["is_enabled"],
         }
 
@@ -390,7 +408,7 @@ class DatabaseService:
             detail = exc.detail or ""
             strip_keys = {
                 key
-                for key in {"launcher_circle_size", "launcher_pill_size", "suggested_questions"}
+                for key in {"launcher_circle_size", "launcher_pill_size", "suggested_questions", "allowed_domains", "chat_model"}
                 if key in detail
             }
             if not strip_keys:
@@ -478,10 +496,69 @@ class DatabaseService:
         return response.json()
 
     async def get_widget(self, widget_id: str) -> dict | None:
+        # Enabled-only lookup, kept for callers that must not see disabled widgets.
+        widget = await self.get_widget_any(widget_id)
+        if widget and not widget.get("is_enabled", True):
+            return None
+        return widget
+
+    async def get_widget_any(self, widget_id: str) -> dict | None:
+        # Public config and chat must see disabled widgets to enforce the
+        # flag explicitly. Previously get_widget filtered them out, so the
+        # is_enabled check in routes could never run and disabled widgets
+        # fell back to default config on the host site.
         response = await self._request(
             "GET",
             "chat_widgets",
-            params={"select": "*", "widget_id": f"eq.{widget_id}", "is_enabled": "eq.true", "limit": "1"},
+            params={"select": "*", "widget_id": f"eq.{widget_id}", "limit": "1"},
+        )
+        rows = response.json()
+        return rows[0] if rows else None
+
+    async def get_widget_chats_for_visitor(self, widget_id: str, visitor_id: str, limit: int = 20) -> list[dict]:
+        response = await self._request(
+            "GET",
+            "widget_chats",
+            params={
+                "select": "message,role,timestamp",
+                "widget_id": f"eq.{widget_id}",
+                "visitor_id": f"eq.{visitor_id}",
+                "order": "timestamp.desc",
+                "limit": str(limit),
+            },
+        )
+        return response.json()
+
+    async def insert_widget_feedback(self, widget_id: str, owner_user_id: str, visitor_id: str, rating: str, bot_message: str = "", question: str = "") -> None:
+        await self._request(
+            "POST",
+            "widget_feedback",
+            json={
+                "widget_id": widget_id,
+                "owner_user_id": owner_user_id,
+                "visitor_id": visitor_id,
+                "rating": rating,
+                "bot_message": bot_message[:2000],
+                "question": question[:2000],
+            },
+        )
+
+    async def get_widget_feedback_counts(self, owner_user_id: str, widget_id: str | None = None) -> dict:
+        params: dict[str, str] = {"select": "rating", "owner_user_id": f"eq.{owner_user_id}"}
+        if widget_id:
+            params["widget_id"] = f"eq.{widget_id}"
+        response = await self._request("GET", "widget_feedback", params=params)
+        rows = response.json()
+        return {
+            "helpful": sum(1 for r in rows if r.get("rating") == "helpful"),
+            "not_helpful": sum(1 for r in rows if r.get("rating") == "not_helpful"),
+        }
+
+    async def get_widget_analytics_sql(self, owner_user_id: str) -> dict | None:
+        response = await self._request(
+            "POST",
+            "rpc/ragora_widget_analytics",
+            json={"owner_user_id": owner_user_id},
         )
         rows = response.json()
         return rows[0] if rows else None

@@ -12,6 +12,7 @@ import {
   loginWithGithub,
   loginWithGoogle,
   resetPassword,
+  resetPasswordWithBackendToken,
   signupWithEmail,
 } from "@/lib/auth";
 
@@ -151,7 +152,10 @@ export function AuthPanel({ mode }: AuthPanelProps) {
         return;
       }
       if (mode === "reset") {
-        const response = await resetPassword("manual-reset-token", password);
+        const backendToken = new URLSearchParams(window.location.search).get("token");
+        const response = backendToken
+          ? await resetPasswordWithBackendToken(backendToken, password)
+          : await resetPassword("manual-reset-token", password);
         setMessage(response.message);
         window.setTimeout(() => router.push("/login"), 850);
         return;

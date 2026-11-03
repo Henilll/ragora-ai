@@ -14,6 +14,8 @@ const METRIC_CONFIG = [
   { key: "unanswered_count", label: "No-Answer Replies", icon: AlertTriangle, color: "#D97706" },
   { key: "total_tokens", label: "Est. Tokens", icon: Zap, color: "#B0ABA0" },
   { key: "average_latency_ms", label: "Avg Latency", icon: Clock, color: "#8A857B" },
+  { key: "feedback_helpful", label: "Helpful Votes", icon: MessageSquare, color: "#5EC99A" },
+  { key: "feedback_not_helpful", label: "Not Helpful Votes", icon: AlertTriangle, color: "#D97706" },
 ];
 
 function MetricCard({

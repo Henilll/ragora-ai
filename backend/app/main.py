@@ -1,6 +1,8 @@
+import logging
+import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router
@@ -30,7 +32,19 @@ async def lifespan(app: FastAPI):
     await app.state.llm.close()
 
 
-app = FastAPI(title="PDF RAG API", version="1.0.0", lifespan=lifespan)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+app = FastAPI(title="Ragora API", version="2.0.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def _log_requests(request: Request, call_next):
+    started = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = int((time.perf_counter() - started) * 1000)
+    # Log method, path, status, and duration only. Never log bodies, tokens,
+    # messages, or file contents.
+    logging.getLogger("ragora").info("%s %s %s %sms", request.method, request.url.path, response.status_code, duration_ms)
+    return response
 settings = get_settings()
 
 app.add_middleware(

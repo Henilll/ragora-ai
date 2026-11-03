@@ -12,6 +12,8 @@ const DEFAULT_WIDGET = {
   title: "Ask AI",
   welcome_message: "Hi. Ask me anything from these documents.",
   suggested_questions: [] as string[],
+  allowed_domains: [] as string[],
+  chat_model: "",
   theme: "dark" as const,
   accent_color: "#E8490F",
   secondary_color: "#161513",
@@ -411,7 +413,7 @@ export function WidgetEmbed({ userId }: Props) {
     const existing = await getWidget(userId);
     if (!existing) return;
     setWidget(existing);
-    setForm({ user_id: userId, title: existing.title, welcome_message: existing.welcome_message, suggested_questions: existing.suggested_questions ?? [], theme: existing.theme, accent_color: existing.accent_color, secondary_color: existing.secondary_color, logo_url: existing.logo_url, icon_label: existing.icon_label, company_name: existing.company_name || "", company_site: existing.company_site || "", company_email: existing.company_email || "", launcher_style: existing.launcher_style, launcher_circle_size: existing.launcher_circle_size ?? DEFAULT_WIDGET.launcher_circle_size, launcher_pill_size: existing.launcher_pill_size ?? DEFAULT_WIDGET.launcher_pill_size, border_radius: existing.border_radius, launcher_label: existing.launcher_label, input_placeholder: existing.input_placeholder, position: existing.position, bot_goal: existing.bot_goal, bot_role: existing.bot_role, tone: existing.tone, custom_instructions: existing.custom_instructions, fallback_message: existing.fallback_message, collect_leads: existing.collect_leads, is_enabled: existing.is_enabled });
+    setForm({ user_id: userId, title: existing.title, welcome_message: existing.welcome_message, suggested_questions: existing.suggested_questions ?? [], allowed_domains: existing.allowed_domains ?? [], chat_model: existing.chat_model ?? "", theme: existing.theme, accent_color: existing.accent_color, secondary_color: existing.secondary_color, logo_url: existing.logo_url, icon_label: existing.icon_label, company_name: existing.company_name || "", company_site: existing.company_site || "", company_email: existing.company_email || "", launcher_style: existing.launcher_style, launcher_circle_size: existing.launcher_circle_size ?? DEFAULT_WIDGET.launcher_circle_size, launcher_pill_size: existing.launcher_pill_size ?? DEFAULT_WIDGET.launcher_pill_size, border_radius: existing.border_radius, launcher_label: existing.launcher_label, input_placeholder: existing.input_placeholder, position: existing.position, bot_goal: existing.bot_goal, bot_role: existing.bot_role, tone: existing.tone, custom_instructions: existing.custom_instructions, fallback_message: existing.fallback_message, collect_leads: existing.collect_leads, is_enabled: existing.is_enabled });
   }
 
   async function handleSave() {
@@ -425,6 +427,8 @@ export function WidgetEmbed({ userId }: Props) {
       const saved = await saveWidget({
         ...form,
         suggested_questions: (form.suggested_questions || []).map((q) => q.trim()).filter(Boolean).map((q) => q.slice(0, 140)).slice(0, 4),
+        allowed_domains: (form.allowed_domains || []).map((d) => d.trim().toLowerCase()).filter(Boolean).slice(0, 20),
+        chat_model: (form.chat_model || "").trim(),
         logo_url: form.logo_url.trim(),
         accent_color: isHexColor(form.accent_color) ? form.accent_color : DEFAULT_WIDGET.accent_color,
         secondary_color: isHexColor(form.secondary_color) ? form.secondary_color : DEFAULT_WIDGET.secondary_color,
@@ -434,7 +438,7 @@ export function WidgetEmbed({ userId }: Props) {
         fallback_message: fallback,
       });
       setWidget(saved);
-      setForm((current) => ({ ...current, fallback_message: saved.fallback_message, suggested_questions: saved.suggested_questions ?? [] }));
+      setForm((current) => ({ ...current, fallback_message: saved.fallback_message, suggested_questions: saved.suggested_questions ?? [], allowed_domains: saved.allowed_domains ?? [], chat_model: saved.chat_model ?? "" }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save widget");
     } finally {
@@ -698,6 +702,18 @@ export function WidgetEmbed({ userId }: Props) {
             <input className="inp" aria-label="Company support email" value={form.company_email} onChange={(e) => setForm({ ...form, company_email: e.target.value })} type="email" placeholder="Company support email" />
           </div>
           <input className="inp" aria-label="Company website" value={form.company_site} onChange={(e) => setForm({ ...form, company_site: e.target.value })} placeholder="Company website (optional)" />
+          <div>
+            <label className="text-xs font-semibold text-slate-300">Allowed domains for this widget (optional)</label>
+            <textarea className="inp mt-2" aria-label="Allowed domains, one per line" value={(form.allowed_domains || []).join("\n")} onChange={(e) => setForm({ ...form, allowed_domains: e.target.value.split("\n") })} rows={2} placeholder={"example.com\nshop.example.com"} style={{ resize: "none" }} />
+            <p className="mt-1 text-xs leading-5 text-slate-500">Leave blank to allow any site (current behaviour). When set, widget chat is rejected from other origins. Subdomains of a listed domain are allowed.</p>
+            <label className="mt-3 block text-xs font-semibold text-slate-300">Chat model (optional, blank = default)</label>
+            <select className="inp mt-2" aria-label="Chat model" value={form.chat_model || ""} onChange={(e) => setForm({ ...form, chat_model: e.target.value })}>
+              <option value="">Default (backend setting)</option>
+              <option value="llama-3.1-8b-instant">llama-3.1-8b-instant (fast)</option>
+              <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile (stronger)</option>
+            </select>
+            <p className="mt-1 text-xs leading-5 text-slate-500">If the chosen model fails, the backend tries its fallback model once before giving up.</p>
+          </div>
           <input className="inp" aria-label="Widget title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Widget title" />
           <input className="inp" aria-label="Launcher button label" value={form.launcher_label} onChange={(e) => setForm({ ...form, launcher_label: e.target.value })} placeholder="Launcher button label" />
           <input className="inp" aria-label="Input placeholder text" value={form.input_placeholder} onChange={(e) => setForm({ ...form, input_placeholder: e.target.value })} placeholder="Input placeholder text" />

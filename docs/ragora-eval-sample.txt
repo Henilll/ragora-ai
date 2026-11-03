@@ -1,0 +1,6 @@
+Ragora is a chatbot platform founded in 2024.
+You can upload PDF and TXT files to Ragora.
+The maximum file size is 20 MB.
+Support email is support@ragora.example.
+The free plan allows 1 widget.
+Ragora answers questions from your uploaded documents and cites sources.

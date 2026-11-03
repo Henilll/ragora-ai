@@ -26,6 +26,8 @@ export type WidgetConfig = {
   title: string;
   welcome_message: string;
   suggested_questions: string[];
+  allowed_domains?: string[];
+  chat_model?: string;
   theme: "dark" | "light";
   accent_color: string;
   secondary_color: string;
@@ -62,6 +64,8 @@ export type WidgetAnalytics = {
   top_questions: Array<{ question: string; count: number }>;
   unanswered_questions: Array<{ question: string; timestamp: string }>;
   daily_messages: Array<{ date: string; count: number }>;
+  feedback_helpful?: number;
+  feedback_not_helpful?: number;
 };
 
 export type WidgetHistory = {
@@ -120,8 +124,8 @@ export type AdminUser = {
 // Both variable names are accepted: the README used to document NEXT_PUBLIC_API_URL,
 // the code used NEXT_PUBLIC_API_BASE_URL. A user who followed the README ended up
 // with the localhost fallback in production, so every upload failed with "Failed to fetch".
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API_BASE_URL } from "@/lib/config";
+export { API_BASE_URL };
 
 export async function checkApiHealth(): Promise<boolean> {
   try {
@@ -215,8 +219,17 @@ export function getAnalytics(userId: string) {
   return jsonRequest<WidgetAnalytics>(`/analytics?user_id=${encodeURIComponent(userId)}`);
 }
 
-export function getWidgetHistory(userId: string) {
-  return jsonRequest<WidgetHistory>(`/widget-history?user_id=${encodeURIComponent(userId)}`);
+export function getWidgetHistory(userId: string, opts?: { q?: string; visitor_id?: string; limit?: number; offset?: number }) {
+  const params = new URLSearchParams({ user_id: userId });
+  if (opts?.q) params.set("q", opts.q);
+  if (opts?.visitor_id) params.set("visitor_id", opts.visitor_id);
+  if (opts?.limit) params.set("limit", String(opts.limit));
+  if (opts?.offset) params.set("offset", String(opts.offset));
+  return jsonRequest<WidgetHistory>(`/widget-history?${params.toString()}`);
+}
+
+export function widgetHistoryExportUrl(userId: string, format: "csv" | "json" = "csv") {
+  return `${API_BASE_URL}/widget-history/export?user_id=${encodeURIComponent(userId)}&format=${format}`;
 }
 
 export async function uploadPdf(userId: string, file: File) {

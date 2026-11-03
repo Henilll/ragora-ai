@@ -23,8 +23,7 @@ export type AuthSession = {
 
 const SESSION_KEY = "ragora_session";
 const LEGACY_USER_KEY = "rag_user_id";
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API_BASE_URL } from "@/lib/config";
 const PKCE_STORAGE_ERROR = "PKCE code verifier not found";
 
 async function readError(response: Response) {
@@ -200,6 +199,11 @@ export async function resetPassword(_token: string, password: string) {
   return { ok: true, message: "Password updated. You can sign in now." };
 }
 
-export async function verifyEmail(code: string) {
-  return authRequest<{ ok: boolean; message: string }>("/auth/verify-email", { code }, true);
+export async function resetPasswordWithBackendToken(token: string, password: string) {
+  return authRequest<{ ok: boolean; message: string }>("/auth/reset-password", { token, password });
+}
+
+export async function verifyEmail(code: string, email?: string) {
+  if (!email) throw new Error("Email is required to verify.");
+  return authRequest<{ ok: boolean; message: string }>("/auth/verify-email", { code, email });
 }

@@ -83,6 +83,12 @@ class AdminOverview(BaseModel):
     enabled_api_keys: int
 
 
+class SignupResponse(BaseModel):
+    email: str
+    verification_required: bool = True
+    message: str
+
+
 class AuthResponse(BaseModel):
     access_token: str
     refresh_token: str
@@ -124,6 +130,7 @@ class ResetPasswordRequest(BaseModel):
 
 
 class VerifyEmailRequest(BaseModel):
+    email: str = Field(min_length=5)
     code: str = Field(min_length=6, max_length=6)
 
 
@@ -134,13 +141,13 @@ class StatusResponse(BaseModel):
 
 class ChatRequest(BaseModel):
     user_id: str = Field(min_length=1)
-    message: str = Field(min_length=1)
+    message: str = Field(min_length=1, max_length=4000)
     stream: bool = False
 
 
 class WidgetChatRequest(BaseModel):
-    message: str = Field(min_length=1)
-    visitor_id: str = Field(min_length=1)
+    message: str = Field(min_length=1, max_length=2000)
+    visitor_id: str = Field(min_length=1, max_length=128)
     stream: bool = False
 
 
@@ -171,6 +178,26 @@ class UploadResponse(BaseModel):
     document_id: str
     file_name: str
     chunk_count: int
+    status: str = "processing"
+
+
+def _clean_allowed_domains(value: object) -> list[str]:
+    if isinstance(value, str):
+        parts = value.splitlines()
+    elif isinstance(value, list):
+        parts = [str(item) for item in value]
+    else:
+        return []
+    cleaned: list[str] = []
+    for part in parts:
+        domain = part.strip().lower()
+        for prefix in ("https://", "http://"):
+            if domain.startswith(prefix):
+                domain = domain[len(prefix):]
+        domain = domain.strip("/").split("/")[0]
+        if domain and domain not in cleaned:
+            cleaned.append(domain)
+    return cleaned[:20]
 
 
 class WidgetConfigRequest(BaseModel):
@@ -178,11 +205,18 @@ class WidgetConfigRequest(BaseModel):
     title: str = "Ask AI"
     welcome_message: str = "Hi. Ask me anything from these documents."
     suggested_questions: list[str] = []
+    allowed_domains: list[str] = []
+    chat_model: str = ""
 
     @field_validator("suggested_questions", mode="before")
     @classmethod
     def _validate_suggested_questions(cls, value: object) -> list[str]:
         return _clean_suggested_questions(value)
+
+    @field_validator("allowed_domains", mode="before")
+    @classmethod
+    def _validate_allowed_domains(cls, value: object) -> list[str]:
+        return _clean_allowed_domains(value)
     theme: Literal["dark", "light"] = "dark"
     accent_color: str = "#38bdf8"
     secondary_color: str = "#0f172a"
@@ -213,11 +247,18 @@ class WidgetConfig(BaseModel):
     title: str
     welcome_message: str
     suggested_questions: list[str] = []
+    allowed_domains: list[str] = []
+    chat_model: str = ""
 
     @field_validator("suggested_questions", mode="before")
     @classmethod
     def _validate_suggested_questions(cls, value: object) -> list[str]:
         return _clean_suggested_questions(value)
+
+    @field_validator("allowed_domains", mode="before")
+    @classmethod
+    def _validate_allowed_domains(cls, value: object) -> list[str]:
+        return _clean_allowed_domains(value)
     theme: Literal["dark", "light"]
     accent_color: str
     secondary_color: str
@@ -254,7 +295,21 @@ class WidgetAnalytics(BaseModel):
     top_questions: list[dict]
     unanswered_questions: list[dict]
     daily_messages: list[dict]
+    feedback_helpful: int = 0
+    feedback_not_helpful: int = 0
 
 
 class WidgetHistory(BaseModel):
     conversations: list[dict]
+
+
+class WidgetFeedbackRequest(BaseModel):
+    visitor_id: str = Field(min_length=1, max_length=128)
+    rating: Literal["helpful", "not_helpful"]
+    bot_message: str = Field(default="", max_length=2000)
+    question: str = Field(default="", max_length=2000)
+
+
+class RegenerateRequest(BaseModel):
+    visitor_id: str = Field(min_length=1, max_length=128)
+    question: str = Field(min_length=1, max_length=2000)

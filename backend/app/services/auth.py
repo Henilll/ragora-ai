@@ -155,3 +155,41 @@ async def verify_supabase_access_token(access_token: str, settings: Settings) ->
         "provider": provider,
         "google_sub": data.get("id") if provider == "google" else "",
     }
+
+
+def create_password_reset_token(user: dict[str, Any], settings: Settings, minutes: int = 60) -> str:
+    """Signed, expiry-bound reset token. No DB row is needed.
+
+    The signature binds the token to the user's current password hash, so
+    a token stops working as soon as the password changes. That gives
+    single-use behaviour without a new table, and an old token cannot be
+    replayed after a successful reset.
+    """
+    expiry = int(time.time()) + minutes * 60
+    payload = f"{user['email']}|{expiry}|{user.get('password_hash') or ''}"
+    signature = hmac.new(
+        settings.jwt_secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    raw = f"{user['email']}|{expiry}|{signature}"
+    return _b64url_encode(raw.encode("utf-8"))
+
+
+def verify_password_reset_token(token: str, user: dict[str, Any], settings: Settings) -> bool:
+    try:
+        raw = _b64url_decode(token).decode("utf-8")
+        email, expiry_str, signature = raw.split("|", 2)
+    except (ValueError, TypeError):
+        return False
+    if email.lower() != (user.get("email") or "").lower():
+        return False
+    try:
+        expiry = int(expiry_str)
+    except ValueError:
+        return False
+    if expiry < int(time.time()):
+        return False
+    payload = f"{user['email']}|{expiry}|{user.get('password_hash') or ''}"
+    expected = hmac.new(
+        settings.jwt_secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)

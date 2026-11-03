@@ -26,7 +26,7 @@ import { FileUpload } from "@/components/FileUpload";
 import { WidgetEmbed } from "@/components/WidgetEmbed";
 import { WidgetHistoryPanel } from "@/components/WidgetHistoryPanel";
 import type { ChatMessage, DocumentItem, WidgetAnalytics, WidgetHistory } from "@/lib/api";
-import { deleteDocument, getAnalytics, getDocuments, getHistory, getWidgetHistory } from "@/lib/api";
+import { deleteDocument, getAnalytics, getDocuments, getHistory, getWidgetHistory, widgetHistoryExportUrl } from "@/lib/api";
 import { clearSession, getSession } from "@/lib/auth";
 
 type View = "overview" | "builder" | "playground";
@@ -111,6 +111,12 @@ export default function DashboardPage() {
     if (docs.status === "fulfilled") setDocuments(docs.value);
     if (stats.status === "fulfilled") setAnalytics(stats.value);
     if (wh.status === "fulfilled") setWidgetHistory(wh.value);
+  }
+
+  async function handleHistorySearch(query: string) {
+    if (!userId) return;
+    const wh = await getWidgetHistory(userId, { q: query || undefined, limit: 30 });
+    setWidgetHistory(wh);
   }
 
   async function handleDeleteDocument(docId: string) {
@@ -406,7 +412,7 @@ export default function DashboardPage() {
                   <p style={{ fontSize: "0.8125rem", color: "var(--text-tertiary)", marginBottom: "1rem" }}>
                     Real-time visitor conversations from your embedded widget
                   </p>
-                  <WidgetHistoryPanel history={widgetHistory} />
+                  <WidgetHistoryPanel history={widgetHistory} onSearch={handleHistorySearch} exportCsvUrl={userId ? widgetHistoryExportUrl(userId, "csv") : undefined} exportJsonUrl={userId ? widgetHistoryExportUrl(userId, "json") : undefined} />
                 </div>
               </div>
             </motion.div>

@@ -136,7 +136,7 @@ function DashboardMockup() {
               <span className="rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-xs text-teal-100">Live</span>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
-              {["92% resolved", "1.8s latency", "18 sources"].map((metric) => (
+              {["Answers from your documents", "Sources cited", "Embeds anywhere"].map((metric) => (
                 <div key={metric} className="rounded-lg border border-white/10 bg-white/[0.045] p-4">
                   <p className="text-2xl font-semibold text-white">{metric.split(" ")[0]}</p>
                   <p className="mt-1 text-xs text-slate-500">{metric.split(" ").slice(1).join(" ")}</p>
@@ -223,7 +223,7 @@ export default function HomePage() {
             </div>
             <div className="absolute -right-2 top-28 hidden rounded-lg border border-teal-300/20 bg-teal-300/10 p-3 text-left shadow-2xl lg:block">
               <p className="text-xs text-teal-100/70">AI widget</p>
-              <p className="text-sm font-semibold text-teal-50">92% answer rate</p>
+              <p className="text-sm font-semibold text-teal-50">Answers from your documents</p>
             </div>
             <DashboardMockup />
           </motion.div>

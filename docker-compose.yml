@@ -1,0 +1,9 @@
+# Local backend only. Frontend runs with npm run dev in frontend/, Supabase
+# is hosted, so this file does not start a database.
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - backend/.env

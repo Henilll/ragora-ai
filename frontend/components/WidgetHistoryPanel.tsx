@@ -5,9 +5,12 @@ import type { WidgetHistory } from "@/lib/api";
 
 type Props = {
   history: WidgetHistory | null;
+  onSearch?: (query: string) => void;
+  exportCsvUrl?: string;
+  exportJsonUrl?: string;
 };
 
-export function WidgetHistoryPanel({ history }: Props) {
+export function WidgetHistoryPanel({ history, onSearch, exportCsvUrl, exportJsonUrl }: Props) {
   const conversations = history?.conversations ?? [];
 
   return (
@@ -18,6 +21,13 @@ export function WidgetHistoryPanel({ history }: Props) {
           <p style={{ fontSize: "0.75rem", color: "var(--text-tertiary)", marginTop: "0.125rem" }}>
             Recent visitor sessions from embedded chatbots
           </p>
+        </div>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+          {onSearch && (
+            <input className="inp" style={{ maxWidth: 260 }} placeholder="Search conversations..." onChange={(e) => onSearch(e.target.value)} aria-label="Search widget conversations" />
+          )}
+          {exportCsvUrl && <a className="badge" href={exportCsvUrl} target="_blank" rel="noreferrer">Export CSV</a>}
+          {exportJsonUrl && <a className="badge" href={exportJsonUrl} target="_blank" rel="noreferrer">Export JSON</a>}
         </div>
         {conversations.length > 0 && (
           <span className="badge-success badge">
