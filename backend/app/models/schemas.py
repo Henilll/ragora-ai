@@ -1,7 +1,30 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+def _clean_suggested_questions(value: object) -> list[str]:
+    """Owner-entered welcome chips: strip, drop empties, cap at 4, cap length.
+
+    Runs on both the builder request and the stored config, so a widget can
+    never show a blank chip or a wall of chips, even if an old row or a
+    direct API call sends more.
+    """
+    if value is None:
+        return []
+    if isinstance(value, str):
+        value = value.split("\n")
+    if not isinstance(value, list):
+        return []
+    cleaned: list[str] = []
+    for item in value:
+        text = str(item).strip()
+        if text:
+            cleaned.append(text[:140])
+        if len(cleaned) >= 4:
+            break
+    return cleaned
 
 
 class AuthUser(BaseModel):
@@ -154,6 +177,12 @@ class WidgetConfigRequest(BaseModel):
     user_id: str = Field(min_length=1)
     title: str = "Ask AI"
     welcome_message: str = "Hi. Ask me anything from these documents."
+    suggested_questions: list[str] = []
+
+    @field_validator("suggested_questions", mode="before")
+    @classmethod
+    def _validate_suggested_questions(cls, value: object) -> list[str]:
+        return _clean_suggested_questions(value)
     theme: Literal["dark", "light"] = "dark"
     accent_color: str = "#38bdf8"
     secondary_color: str = "#0f172a"
@@ -183,6 +212,12 @@ class WidgetConfig(BaseModel):
     user_id: str
     title: str
     welcome_message: str
+    suggested_questions: list[str] = []
+
+    @field_validator("suggested_questions", mode="before")
+    @classmethod
+    def _validate_suggested_questions(cls, value: object) -> list[str]:
+        return _clean_suggested_questions(value)
     theme: Literal["dark", "light"]
     accent_color: str
     secondary_color: str
