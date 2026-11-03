@@ -32,6 +32,7 @@ import {
   type AdminUser,
 } from "@/lib/api";
 import { getSession } from "@/lib/auth";
+import { RagoraMark } from "@/components/RagoraLogo";
 
 type NewApiKeyForm = {
   service: "groq" | "mistral";
@@ -149,11 +150,9 @@ export default function AdminPage() {
   return (
     <main className="premium-shell min-h-screen px-4 py-6 sm:px-6">
       <div className="relative mx-auto max-w-7xl">
-        <header className="mb-6 flex flex-col justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.045] p-4 backdrop-blur-xl sm:flex-row sm:items-center">
+        <header className="card mb-6 flex flex-col justify-between gap-4 p-4 sm:flex-row sm:items-center">
           <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-xl bg-white text-slate-950 shadow-[0_0_50px_rgba(196,181,253,0.22)]">
-              <ShieldCheck size={20} />
-            </div>
+            <RagoraMark size={44} />
             <div>
               <p className="text-xl font-semibold tracking-tight text-white">Ragora Admin</p>
               <p className="mt-1 text-sm text-slate-500">

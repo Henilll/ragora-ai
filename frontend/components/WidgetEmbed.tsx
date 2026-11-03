@@ -47,7 +47,7 @@ const TEMPLATES = [
 ];
 
 const PRESET_LOGOS = [
-  { label: "Spark", initials: "AI", bg: "#6366f1", fg: "#ffffff", shape: "spark" },
+  { label: "Spark", initials: "AI", bg: "#0C0E11", fg: "#ffffff", shape: "spark" },
   { label: "Support", initials: "S", bg: "#0F766E", fg: "#ffffff", shape: "chat" },
   { label: "Growth", initials: "G", bg: "#2E9E6B", fg: "#052e1a", shape: "bolt" },
   { label: "Trust", initials: "T", bg: "#D97706", fg: "#241200", shape: "shield" },
@@ -403,6 +403,11 @@ export function WidgetEmbed({ userId }: Props) {
   const [isCheckingBackend, setIsCheckingBackend] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [mobileView, setMobileView] = useState<"edit" | "preview">("edit");
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const isDirty = savedSnapshot !== null && JSON.stringify(form) !== savedSnapshot;
 
   useEffect(() => {
     setForm((c) => ({ ...c, user_id: userId }));
@@ -413,10 +418,17 @@ export function WidgetEmbed({ userId }: Props) {
     const existing = await getWidget(userId);
     if (!existing) return;
     setWidget(existing);
-    setForm({ user_id: userId, title: existing.title, welcome_message: existing.welcome_message, suggested_questions: existing.suggested_questions ?? [], allowed_domains: existing.allowed_domains ?? [], chat_model: existing.chat_model ?? "", theme: existing.theme, accent_color: existing.accent_color, secondary_color: existing.secondary_color, logo_url: existing.logo_url, icon_label: existing.icon_label, company_name: existing.company_name || "", company_site: existing.company_site || "", company_email: existing.company_email || "", launcher_style: existing.launcher_style, launcher_circle_size: existing.launcher_circle_size ?? DEFAULT_WIDGET.launcher_circle_size, launcher_pill_size: existing.launcher_pill_size ?? DEFAULT_WIDGET.launcher_pill_size, border_radius: existing.border_radius, launcher_label: existing.launcher_label, input_placeholder: existing.input_placeholder, position: existing.position, bot_goal: existing.bot_goal, bot_role: existing.bot_role, tone: existing.tone, custom_instructions: existing.custom_instructions, fallback_message: existing.fallback_message, collect_leads: existing.collect_leads, is_enabled: existing.is_enabled });
+    const loaded = { user_id: userId, title: existing.title, welcome_message: existing.welcome_message, suggested_questions: existing.suggested_questions ?? [], allowed_domains: existing.allowed_domains ?? [], chat_model: existing.chat_model ?? "", theme: existing.theme, accent_color: existing.accent_color, secondary_color: existing.secondary_color, logo_url: existing.logo_url, icon_label: existing.icon_label, company_name: existing.company_name || "", company_site: existing.company_site || "", company_email: existing.company_email || "", launcher_style: existing.launcher_style, launcher_circle_size: existing.launcher_circle_size ?? DEFAULT_WIDGET.launcher_circle_size, launcher_pill_size: existing.launcher_pill_size ?? DEFAULT_WIDGET.launcher_pill_size, border_radius: existing.border_radius, launcher_label: existing.launcher_label, input_placeholder: existing.input_placeholder, position: existing.position, bot_goal: existing.bot_goal, bot_role: existing.bot_role, tone: existing.tone, custom_instructions: existing.custom_instructions, fallback_message: existing.fallback_message, collect_leads: existing.collect_leads, is_enabled: existing.is_enabled };
+    setForm(loaded);
+    setSavedSnapshot(JSON.stringify(loaded));
   }
 
   async function handleSave() {
+    if (!form.title.trim()) {
+      setError("Give the widget a title first, in Step 1. It shows at the top of the chat window.");
+      setStep(1);
+      return;
+    }
     setIsSaving(true);
     setError(null);
     try {
@@ -438,7 +450,10 @@ export function WidgetEmbed({ userId }: Props) {
         fallback_message: fallback,
       });
       setWidget(saved);
-      setForm((current) => ({ ...current, fallback_message: saved.fallback_message, suggested_questions: saved.suggested_questions ?? [], allowed_domains: saved.allowed_domains ?? [], chat_model: saved.chat_model ?? "" }));
+      const nextForm = { ...form, fallback_message: saved.fallback_message, suggested_questions: saved.suggested_questions ?? [], allowed_domains: saved.allowed_domains ?? [], chat_model: saved.chat_model ?? "" };
+      setForm(nextForm);
+      setSavedSnapshot(JSON.stringify(nextForm));
+      setSavedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save widget");
     } finally {
@@ -528,7 +543,7 @@ export function WidgetEmbed({ userId }: Props) {
 
   return (
     <section className="rounded-xl border border-white/10 bg-[#171B21] p-4 sm:p-6">
-      {/* Header */}
+      {/* Top bar: status and Save are always visible, never buried at the bottom. */}
       <div className="mb-5 flex flex-col gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
           <div style={{ width: 32, height: 32, borderRadius: 8, background: "var(--accent-dim)", border: "1px solid rgba(232,73,15,0.25)", display: "grid", placeItems: "center" }}>
@@ -536,44 +551,59 @@ export function WidgetEmbed({ userId }: Props) {
           </div>
           <div>
             <p className="text-lg font-semibold tracking-tight text-white">Chatbot Builder</p>
-            <p style={{ fontSize: "0.75rem", color: "var(--text-tertiary)" }}>Configure appearance, behavior, launch state, and embed code.</p>
+            <p style={{ fontSize: "0.75rem", color: "var(--text-tertiary)" }}>
+              {form.is_enabled ? "Live on your site" : "Paused - visitors will not see it"}
+              {isDirty ? " · Unsaved changes" : savedAt ? ` · Saved at ${savedAt}` : ""}
+            </p>
           </div>
         </div>
-        <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
-          <div
-            style={{
-              width: 36,
-              height: 20,
-              borderRadius: 999,
-              background: form.is_enabled ? "var(--accent)" : "var(--surface-3)",
-              border: "1px solid var(--border-default)",
-              position: "relative",
-              transition: "background 0.15s",
-              cursor: "pointer",
-            }}
-            onClick={() => setForm({ ...form, is_enabled: !form.is_enabled })}
-          >
+        <div className="flex flex-wrap items-center gap-2">
+          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
             <div
-              style={{
-                position: "absolute",
-                top: 2,
-                left: form.is_enabled ? 18 : 2,
-                width: 14,
-                height: 14,
-                borderRadius: "50%",
-                background: "#fff",
-                transition: "left 0.15s",
-              }}
-            />
-          </div>
-          <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 500 }}>
-            {form.is_enabled ? "Live" : "Paused"}
-          </span>
-        </label>
+              style={{ width: 36, height: 20, borderRadius: 999, background: form.is_enabled ? "var(--accent)" : "var(--surface-3)", border: "1px solid var(--border-default)", position: "relative", transition: "background 0.15s", cursor: "pointer" }}
+              onClick={() => setForm({ ...form, is_enabled: !form.is_enabled })}
+              role="switch"
+              aria-checked={form.is_enabled}
+              aria-label="Widget enabled"
+            >
+              <div style={{ position: "absolute", top: 2, left: form.is_enabled ? 18 : 2, width: 14, height: 14, borderRadius: "50%", background: "#fff", transition: "left 0.15s" }} />
+            </div>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 500 }}>{form.is_enabled ? "Live" : "Paused"}</span>
+          </label>
+          <button type="button" onClick={handleSave} disabled={isSaving} className="btn-accent inline-flex h-10 items-center gap-2 px-4">
+            {isSaving ? <Loader2 size={15} className="animate-spin" /> : null}
+            {isSaving ? "Saving…" : isDirty ? "Save changes" : "Save"}
+          </button>
+        </div>
       </div>
-
+      {error && <div className="notice-error mb-5" role="alert">{error}</div>}
+      {/* Steps, like Chatbase / Fin / Botpress: Look, Behaviour, Publish. */}
+      <nav className="mb-5 flex gap-1 rounded-lg border border-white/10 bg-white/[0.04] p-1" aria-label="Builder steps">
+        {([{ n: 1, label: "Look", hint: "Logo, colours, launcher" }, { n: 2, label: "Behaviour", hint: "Role, tone, fallback" }, { n: 3, label: "Publish", hint: "Checklist, embed code" }] as const).map((s) => (
+          <button
+            key={s.n}
+            type="button"
+            onClick={() => setStep(s.n)}
+            aria-current={step === s.n ? "step" : undefined}
+            className="flex-1 rounded-md px-3 py-2 text-left"
+            style={{ background: step === s.n ? "#fff" : "transparent", color: step === s.n ? "#0C0E11" : "var(--text-secondary)" }}
+          >
+            <span className="block text-xs font-bold">Step {s.n} - {s.label}</span>
+            <span className="mt-0.5 hidden text-[11px] sm:block" style={{ color: step === s.n ? "#4b5563" : "var(--text-tertiary)" }}>{s.hint}</span>
+          </button>
+        ))}
+      </nav>
+      {/* Mobile: Edit / Preview switch, so the preview is not a long scroll away. */}
+      <div className="mb-5 flex gap-1 rounded-lg border border-white/10 bg-white/[0.04] p-1 xl:hidden" aria-label="Edit or preview">
+        {(["edit", "preview"] as const).map((v) => (
+          <button key={v} type="button" onClick={() => setMobileView(v)} className="flex-1 rounded-md py-2 text-xs font-semibold capitalize" style={{ background: mobileView === v ? "#fff" : "transparent", color: mobileView === v ? "#0C0E11" : "var(--text-secondary)" }}>
+            {v === "edit" ? "Edit" : "Preview"}
+          </button>
+        ))}
+      </div>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+      <div className={`flex-col gap-3 ${mobileView === "preview" ? "hidden xl:flex" : "flex"}`}>
+        {step === 1 && (<>
         {/* Templates */}
         <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
@@ -724,7 +754,7 @@ export function WidgetEmbed({ userId }: Props) {
               <button
                 type="button"
                 onClick={() => setForm({ ...form, suggested_questions: ["What services do you offer?", "How do I get started?", "How can I contact support?"] })}
-                className="text-xs font-semibold text-indigo-300 hover:text-indigo-200"
+                className="text-xs font-semibold text-[#FF6B2C] hover:text-white"
               >
                 Use examples
               </button>
@@ -778,7 +808,7 @@ export function WidgetEmbed({ userId }: Props) {
                 max={96}
                 value={form.launcher_circle_size}
                 onChange={(e) => setForm({ ...form, launcher_circle_size: Number(e.target.value) })}
-                className="w-full accent-indigo-400"
+                className="w-full" style={{ accentColor: "var(--accent)" }}
               />
             </label>
             <label className="space-y-2">
@@ -792,12 +822,14 @@ export function WidgetEmbed({ userId }: Props) {
                 max={80}
                 value={form.launcher_pill_size}
                 onChange={(e) => setForm({ ...form, launcher_pill_size: Number(e.target.value) })}
-                className="w-full accent-indigo-400"
+                className="w-full" style={{ accentColor: "var(--accent)" }}
               />
             </label>
           </div>
         </Section>
 
+        </>)}
+        {step === 2 && (<>
         {/* Behavior */}
         <Section icon={Bot} title="Behavior" description="Control how the assistant answers and escalates.">
           <select className="inp" value={form.bot_role} onChange={(e) => setForm({ ...form, bot_role: e.target.value })}>
@@ -825,19 +857,12 @@ export function WidgetEmbed({ userId }: Props) {
             <input type="checkbox" checked={form.collect_leads} onChange={(e) => setForm({ ...form, collect_leads: e.target.checked })} style={{ accentColor: "var(--accent)" }} />
             <span style={{ fontSize: "0.8125rem", color: "var(--text-secondary)" }}>Collect lead / contact details when useful</span>
           </label>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={isSaving}
-            className="btn-accent"
-            style={{ height: "2.625rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}
-          >
-            {isSaving ? <Loader2 size={15} className="animate-spin" /> : null}
-            {isSaving ? "Saving…" : "Save Chatbot"}
-          </button>
-          {error && <p style={{ fontSize: "0.75rem", color: "var(--danger)" }}>{error}</p>}
         </Section>
 
+        </>)}
+        {step === 3 && (<>
+          <BuilderChecklist form={form} widget={widget} />
+          <TestGuide />
         {/* Embed code */}
         {widget?.embed_script && (
           <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
@@ -870,11 +895,16 @@ export function WidgetEmbed({ userId }: Props) {
             </pre>
           </div>
         )}
+          {!widget?.embed_script && (
+            <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+              <p className="text-sm font-semibold text-white">Embed code appears after the first save</p>
+              <p className="mt-1 text-xs leading-5 text-slate-400">Save from the top bar, then come back to Step 3. Paste the script once, just before &lt;/body&gt;, on every page where the widget should appear.</p>
+            </div>
+          )}
+        </>)}
       </div>
-      <div className="flex flex-col gap-4">
+      <div className={`flex-col gap-4 xl:sticky xl:top-4 xl:self-start ${mobileView === "edit" ? "hidden xl:flex" : "flex"}`}>
         <WidgetPreview form={form} />
-        <BuilderChecklist form={form} widget={widget} />
-        <TestGuide />
       </div>
       </div>
     </section>

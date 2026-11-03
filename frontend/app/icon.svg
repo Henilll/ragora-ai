@@ -1,5 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="16" fill="#f8fafc"/>
-  <path d="M32 10l4.8 16.8L54 32l-17.2 5.2L32 54l-4.8-16.8L10 32l17.2-5.2L32 10z" fill="#0f172a"/>
-  <path d="M32 21l2.2 8.8L43 32l-8.8 2.2L32 43l-2.2-8.8L21 32l8.8-2.2L32 21z" fill="#8b5cf6"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Ragora"><rect width="64" height="64" rx="14" fill="#F2EFE7"/>
+<line x1="22" y1="22" x2="43" y2="19" stroke="#0C0E11" stroke-width="3" stroke-linecap="round"/>
+<line x1="22" y1="22" x2="33" y2="45" stroke="#0C0E11" stroke-width="3" stroke-linecap="round"/>
+<line x1="43" y1="19" x2="33" y2="45" stroke="#0C0E11" stroke-width="3" stroke-linecap="round"/>
+<circle cx="22" cy="22" r="10" fill="#E8490F"/>
+<circle cx="43" cy="19" r="7" fill="#0C0E11"/>
+<circle cx="33" cy="45" r="7" fill="#0C0E11"/></svg>

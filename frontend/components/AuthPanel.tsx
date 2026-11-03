@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowRight, CheckCircle2, Eye, EyeOff, Github, Loader2 } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { RagoraLogo, RagoraMark } from "@/components/RagoraLogo";
 import {
   completeSupabaseRedirect,
   forgotPassword,
@@ -51,11 +52,7 @@ const modeCopy: Record<Mode, { title: string; description: string; cta: string }
 };
 
 function LogoMark() {
-  return (
-    <span className="grid h-10 w-10 place-items-center rounded-lg bg-white text-base font-bold text-[#0C0E11]">
-      H<span style={{ color: "#E8490F" }}>.</span>
-    </span>
-  );
+  return <RagoraMark size={40} />;
 }
 
 function GoogleIcon() {

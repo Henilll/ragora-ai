@@ -22,6 +22,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useState } from "react";
+import { RagoraLogo, RagoraMark } from "@/components/RagoraLogo";
 
 const developer = {
   name: "Henil Bhavsar",
@@ -30,14 +31,7 @@ const developer = {
 };
 
 function LogoMark() {
-  return (
-    <span className="flex items-center gap-2.5">
-      <span className="relative grid h-9 w-9 place-items-center rounded-lg bg-white text-base font-bold text-[#16130F]">
-        H<span className="absolute bottom-1 right-1 h-2 w-2 rounded-full bg-[#E8490F]" />
-      </span>
-      <span className="text-base font-semibold tracking-tight text-[#F2EFE7]">Ragora</span>
-    </span>
-  );
+  return <RagoraLogo />;
 }
 
 function DemoWidget() {
@@ -78,9 +72,7 @@ function DemoWidget() {
     <div className="rounded-2xl border border-white/10 bg-[#FFFEFA] p-0 text-[#16130F] shadow-[0_24px_70px_rgba(0,0,0,0.45)]">
       <div className="flex items-center justify-between border-b border-black/10 px-5 py-4">
         <div className="flex items-center gap-3">
-          <span className="relative grid h-10 w-10 place-items-center rounded-lg bg-[#16130F] text-base font-bold text-white">
-            H<span className="absolute bottom-1 right-1 h-2 w-2 rounded-full bg-[#E8490F]" />
-          </span>
+          <RagoraMark size={40} variant="dark" />
           <div>
             <p className="text-sm font-semibold">Ask Ragora</p>
             <p className="text-xs text-black/60">Answers from sample documents</p>

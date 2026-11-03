@@ -23,6 +23,7 @@ import { DocumentList } from "@/components/DocumentList";
 import { FileUpload } from "@/components/FileUpload";
 import { WidgetEmbed } from "@/components/WidgetEmbed";
 import { WidgetHistoryPanel } from "@/components/WidgetHistoryPanel";
+import { RagoraLogo, RagoraMark } from "@/components/RagoraLogo";
 import type { ChatMessage, DocumentItem, WidgetAnalytics, WidgetHistory } from "@/lib/api";
 import { deleteDocument, getAnalytics, getDocuments, getHistory, getWidgetHistory, widgetHistoryExportUrl } from "@/lib/api";
 import { clearSession, getSession } from "@/lib/auth";
@@ -163,11 +164,8 @@ export default function DashboardPage() {
       {/* Sidebar: from lg up, so a laptop sees sources without scrolling past content. */}
       <aside className="hidden w-[280px] shrink-0 flex-col overflow-y-auto border-r border-white/10 bg-[#0C0E11] px-4 py-5 lg:flex">
         <div className="mb-6 flex items-center gap-2.5">
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-white text-sm font-bold text-[#0C0E11]">
-            H<span style={{ color: "#E8490F" }}>.</span>
-          </div>
+          <RagoraLogo size={36} />
           <div className="min-w-0">
-            <p className="truncate text-sm font-bold text-white">Ragora</p>
             <p className="truncate text-xs text-slate-500" title={userId}>{userId}</p>
           </div>
         </div>
@@ -197,10 +195,7 @@ export default function DashboardPage() {
         {/* Mobile header */}
         <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-[#0C0E11] px-4 lg:hidden">
           <div className="flex min-w-0 items-center gap-2.5">
-            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white text-xs font-bold text-[#0C0E11]">
-              H<span style={{ color: "#E8490F" }}>.</span>
-            </div>
-            <p className="truncate text-sm font-bold text-white">Ragora</p>
+            <RagoraMark size={32} />
           </div>
           <div className="flex items-center gap-2">
             {isAdmin && (
@@ -346,7 +341,7 @@ export default function DashboardPage() {
             {activeView === "builder" && (
               <motion.div key="builder" {...viewMotion} transition={{ duration: 0.28, ease: "easeOut" }} className="p-4 sm:p-6">
                 <div className="card mb-5 p-5">
-                  <p className="rag3-eyebrow">Step 1 - Appearance · Step 2 - Behaviour · Step 3 - Publish</p>
+                  <p className="rag3-eyebrow">Step 1 - Look · Step 2 - Behaviour · Step 3 - Publish</p>
                   <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Design a customer-facing assistant</h2>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
                     Tune brand, tone, instructions and install script in one place. The preview on
