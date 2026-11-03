@@ -769,6 +769,7 @@ async def public_widget_config(widget_id: str, db: DatabaseService = Depends(get
         "widget_id": widget["widget_id"],
         "title": widget["title"],
         "welcome_message": widget["welcome_message"],
+        "suggested_questions": widget.get("suggested_questions") or [],
         "theme": widget["theme"],
         "accent_color": widget["accent_color"],
         "secondary_color": widget["secondary_color"],
