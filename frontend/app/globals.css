@@ -360,3 +360,49 @@ select.inp option, select.auth-input option {
 @media (prefers-reduced-motion: reduce) {
   .fade-up, .fade-up-d1, .fade-up-d2, .fade-up-d3, .fade-up-d4 { animation: none; }
 }
+
+/* ── 21st.dev landing pack (appended 2026-11-15) ── */
+/* Marquee: capability pills strip. */
+@keyframes marquee-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.marquee-track {
+  animation: marquee-scroll 36s linear infinite;
+}
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+
+/* Animated beam: orange dash flowing along the SVG path. */
+@keyframes beam-dash {
+  to { stroke-dashoffset: -24; }
+}
+.animate-beam {
+  animation: beam-dash 1.2s linear infinite;
+}
+
+/* Shimmer button: white sweep across the orange CTA on hover. */
+.shimmer-sweep {
+  transform: translateX(-150%);
+  background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.35) 50%, transparent 60%);
+}
+.shimmer-button:hover .shimmer-sweep {
+  animation: shimmer-sweep 0.9s ease forwards;
+}
+@keyframes shimmer-sweep {
+  from { transform: translateX(-150%); }
+  to { transform: translateX(150%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track,
+  .animate-beam,
+  .shimmer-button:hover .shimmer-sweep {
+    animation: none;
+  }
+  .shimmer-sweep {
+    transform: none;
+    opacity: 0;
+  }
+}

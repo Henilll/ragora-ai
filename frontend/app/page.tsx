@@ -7,8 +7,8 @@ import {
   BarChart3,
   Bot,
   Check,
-  ChevronDown,
   FileSearch,
+  FileText,
   Globe2,
   Linkedin,
   LockKeyhole,
@@ -21,8 +21,15 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { RagoraLogo, RagoraMark } from "@/components/RagoraLogo";
+import { AnimatedBeam, BeamCircle } from "@/components/ui/animated-beam";
+import { NumberTicker } from "@/components/ui/number-ticker";
+import { Spotlight } from "@/components/ui/spotlight";
+import { ShimmerButton } from "@/components/ui/shimmer-button";
+import { BentoCard, BentoGrid } from "@/components/ui/bento-grid";
+import { Marquee } from "@/components/ui/marquee";
+import { FaqAccordion } from "@/components/ui/faq-accordion";
 
 const developer = {
   name: "Henil Bhavsar",
@@ -174,7 +181,7 @@ const features = [
   },
 ];
 
-const faqs = [
+const faqs: [string, string][] = [
   ["What does Ragora do?", "Ragora turns your documents into a website chatbot. Visitors ask questions, Ragora retrieves the relevant chunks, and answers with sources, in your brand colours."],
   ["What files can I upload?", "PDF, TXT, Markdown, and DOCX, up to 20 MB and 200 pages for PDFs by default. Uploads run in the background and show processing, ready, or failed."],
   ["What happens when Ragora does not know an answer?", "It uses your fallback message, for example 'I do not know based on the provided documents.' It does not invent prices, dates, policies, or document contents."],
@@ -210,9 +217,23 @@ const pricing = [
   },
 ];
 
+const headlineWords = [
+  { text: "Your", accent: false },
+  { text: "documents,", accent: false },
+  { text: "answering", accent: true },
+  { text: "customers.", accent: false },
+];
+
 export default function HomePage() {
-  const [openFaq, setOpenFaq] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Animated beam refs for the "How it works" visual.
+  const beamContainerRef = useRef<HTMLDivElement>(null);
+  const pdfRef = useRef<HTMLDivElement>(null);
+  const txtRef = useRef<HTMLDivElement>(null);
+  const docxRef = useRef<HTMLDivElement>(null);
+  const nodesRef = useRef<HTMLDivElement>(null);
+  const widgetRef = useRef<HTMLDivElement>(null);
 
   return (
     <main className="min-h-screen bg-[#0C0E11] text-[#F2EFE7]">
@@ -248,28 +269,45 @@ export default function HomePage() {
         )}
       </nav>
 
-      <section className="mx-auto max-w-7xl px-4 pb-16 pt-14 sm:px-6 sm:pt-20">
-        <div className="grid items-start gap-12 lg:grid-cols-[1.05fr_0.95fr]">
+      <section className="relative mx-auto max-w-7xl overflow-hidden px-4 pb-16 pt-14 sm:px-6 sm:pt-20">
+        <Spotlight />
+        <div className="relative grid items-start gap-12 lg:grid-cols-[1.05fr_0.95fr]">
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}>
             <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold text-[#B0ABA0]">
               <span className="h-2 w-2 rounded-full bg-[#E8490F]" /> RAG chatbot platform, built for real sites
             </p>
-            <h1 className="text-5xl font-semibold leading-[1.05] tracking-tight sm:text-6xl">
-              Your documents, answering customers.
-            </h1>
+            <motion.h1
+              initial="hidden"
+              animate="show"
+              variants={{ show: { transition: { staggerChildren: 0.09 } } }}
+              className="text-5xl font-semibold leading-[1.05] tracking-tight sm:text-6xl"
+            >
+              {headlineWords.map((word) => (
+                <motion.span
+                  key={word.text}
+                  variants={{
+                    hidden: { opacity: 0, y: 12 },
+                    show: { opacity: 1, y: 0 },
+                  }}
+                  className={word.accent ? "text-[#FF6B2C]" : undefined}
+                >
+                  {word.text}{" "}
+                </motion.span>
+              ))}
+            </motion.h1>
             <p className="mt-6 max-w-xl text-lg leading-8 text-[#B0ABA0]">
               Upload your PDFs and docs, embed one chatbot on your site, and give visitors cited answers from your own knowledge, not guesses. When Ragora does not know, it says so.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Link href="/signup" className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-[#E8490F] px-6 font-semibold text-white hover:bg-[#FF6B2C]">
+              <ShimmerButton href="/signup">
                 Start free <ArrowRight size={18} />
-              </Link>
+              </ShimmerButton>
               <a href="#how" className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-white/15 px-6 font-semibold text-white hover:bg-white/5">
                 See how it works
               </a>
             </div>
             <div className="mt-10 flex flex-wrap gap-x-8 gap-y-3 border-t border-white/10 pt-6 text-sm">
-              <div><p className="font-semibold text-white">250+ live users</p><p className="text-[#76716A]">On Ragora today</p></div>
+              <div><p className="font-semibold text-white"><NumberTicker value={250} suffix="+" /> live users</p><p className="text-[#76716A]">On Ragora today</p></div>
               <div><p className="font-semibold text-white">PDF, TXT, MD, DOCX</p><p className="text-[#76716A]">Upload formats</p></div>
               <div><p className="font-semibold text-white">Sources cited</p><p className="text-[#76716A]">On every grounded answer</p></div>
             </div>
@@ -284,11 +322,30 @@ export default function HomePage() {
         </div>
       </section>
 
+      <Marquee />
+
       <section id="how" style={{ scrollMarginTop: 84 }} className="border-y border-white/10 bg-[#12151A] px-4 py-20 sm:px-6">
         <div className="mx-auto max-w-7xl">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-[#76716A]">How it works</p>
           <h2 className="max-w-2xl text-4xl font-semibold tracking-tight sm:text-5xl">Three steps, no code, no fake demo.</h2>
-          <div className="mt-12 grid gap-4 md:grid-cols-3">
+          <div ref={beamContainerRef} className="relative mb-12 mt-12 rounded-xl border border-white/10 bg-[#0C0E11] p-6 sm:p-8">
+            <div className="relative z-10 flex flex-col items-center gap-6 md:flex-row md:justify-between md:gap-4">
+              <div className="flex flex-row flex-wrap justify-center gap-3 md:flex-col md:gap-4">
+                <BeamCircle ref={pdfRef}><FileText size={16} className="text-[#FF6B2C]" /> PDF</BeamCircle>
+                <BeamCircle ref={txtRef}><FileText size={16} className="text-[#FF6B2C]" /> TXT / MD</BeamCircle>
+                <BeamCircle ref={docxRef}><FileText size={16} className="text-[#FF6B2C]" /> DOCX</BeamCircle>
+              </div>
+              <div ref={nodesRef} className="relative z-10">
+                <RagoraMark size={64} variant="dark" />
+              </div>
+              <BeamCircle ref={widgetRef}><Bot size={16} className="text-[#FF6B2C]" /> Ask Ragora</BeamCircle>
+            </div>
+            <AnimatedBeam containerRef={beamContainerRef} fromRef={pdfRef} toRef={nodesRef} curvature={-40} className="hidden md:block" />
+            <AnimatedBeam containerRef={beamContainerRef} fromRef={txtRef} toRef={nodesRef} curvature={0} className="hidden md:block" />
+            <AnimatedBeam containerRef={beamContainerRef} fromRef={docxRef} toRef={nodesRef} curvature={40} className="hidden md:block" />
+            <AnimatedBeam containerRef={beamContainerRef} fromRef={nodesRef} toRef={widgetRef} curvature={0} className="hidden md:block" />
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
             {steps.map((step) => (
               <article key={step.number} className="rounded-xl border border-white/10 bg-[#0C0E11] p-6">
                 <p className="text-sm font-semibold text-[#E8490F]">{step.number}</p>
@@ -303,18 +360,20 @@ export default function HomePage() {
       <section id="features" style={{ scrollMarginTop: 84 }} className="mx-auto max-w-7xl px-4 py-24 sm:px-6">
         <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-[#76716A]">Features</p>
         <h2 className="max-w-2xl text-4xl font-semibold tracking-tight sm:text-5xl">Built for answers you can trust, and questions you can fix.</h2>
-        <div className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {features.map((feature) => {
+        <BentoGrid className="mt-12">
+          {features.map((feature, index) => {
             const Icon = feature.icon;
             return (
-              <article key={feature.title} className="rounded-xl border border-white/10 bg-[#12151A] p-6">
-                <div className="mb-5 grid h-11 w-11 place-items-center rounded-lg bg-[#E8490F]/12 text-[#FF6B2C]"><Icon size={20} /></div>
-                <h3 className="text-lg font-semibold">{feature.title}</h3>
-                <p className="mt-3 text-sm leading-6 text-[#B0ABA0]">{feature.text}</p>
-              </article>
+              <BentoCard
+                key={feature.title}
+                className={index === 0 ? "lg:col-span-2" : undefined}
+                icon={<Icon size={20} />}
+                title={feature.title}
+                text={feature.text}
+              />
             );
           })}
-        </div>
+        </BentoGrid>
       </section>
 
       <section className="border-y border-white/10 bg-[#12151A] px-4 py-20 sm:px-6">
@@ -402,17 +461,7 @@ export default function HomePage() {
 
       <section id="faq" style={{ scrollMarginTop: 84 }} className="mx-auto max-w-3xl px-4 py-24 sm:px-6">
         <h2 className="mb-8 text-center text-4xl font-semibold tracking-tight">Questions, answered honestly.</h2>
-        <div className="space-y-3">
-          {faqs.map(([question, answer], index) => (
-            <button key={question} type="button" onClick={() => setOpenFaq(openFaq === index ? -1 : index)} className="w-full rounded-xl border border-white/10 bg-[#12151A] p-5 text-left">
-              <span className="flex items-center justify-between gap-4 text-base font-semibold">
-                {question}
-                <ChevronDown className={`h-4 w-4 shrink-0 transition ${openFaq === index ? "rotate-180" : ""}`} />
-              </span>
-              {openFaq === index && <span className="mt-3 block text-sm leading-6 text-[#B0ABA0]">{answer}</span>}
-            </button>
-          ))}
-        </div>
+        <FaqAccordion items={faqs} />
       </section>
 
       <section className="px-4 pb-20 sm:px-6">
